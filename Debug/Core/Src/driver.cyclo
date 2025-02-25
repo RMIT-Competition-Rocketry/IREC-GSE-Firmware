@@ -1,0 +1,10 @@
+../Drivers/CMSIS/Include/core_cm4.h:1684:22:__NVIC_EnableIRQ	2
+../Drivers/CMSIS/Include/core_cm4.h:1814:22:__NVIC_SetPriority	2
+../Core/Src/driver.c:10:6:configureI2CBus1	1
+../Core/Src/driver.c:49:6:configureSPIBus1	1
+../Core/Src/driver.c:102:6:configureSPIBus3	2
+../Core/Src/driver.c:154:6:configureSPIBus4	1
+../Core/Src/driver.c:193:6:configureRCC_APB1	1
+../Core/Src/driver.c:202:6:configureRCC_APB2	1
+../Core/Src/driver.c:210:6:configureRCC_AHB1	1
+../Core/Src/driver.c:218:6:configure_TIM1	2

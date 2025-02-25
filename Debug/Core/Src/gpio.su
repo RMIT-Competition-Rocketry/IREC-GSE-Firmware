@@ -1,0 +1,5 @@
+../Drivers/CMSIS/Include/core_cm4.h:1684:22:__NVIC_EnableIRQ	16	static,ignoring_inline_asm
+../Core/Src/gpio.c:13:6:GPIO_init	24	static
+../Core/Src/gpio.c:33:6:GPIO_init_interrupt	24	static
+../Core/Src/gpio.c:1357:9:GPIO_read	24	static
+../Core/Src/gpio.c:1369:6:GPIO_write	24	static

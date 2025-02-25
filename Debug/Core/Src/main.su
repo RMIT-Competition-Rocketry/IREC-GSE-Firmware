@@ -1,0 +1,11 @@
+../Drivers/CMSIS/Include/core_cm4.h:1684:22:__NVIC_EnableIRQ	16	static,ignoring_inline_asm
+../Drivers/CMSIS/Include/core_cm4.h:1722:22:__NVIC_DisableIRQ	16	static,ignoring_inline_asm
+../Drivers/CMSIS/Include/core_cm4.h:1814:22:__NVIC_SetPriority	16	static
+../Core/Src/main.c:148:5:main	24	static,ignoring_inline_asm
+../Core/Src/main.c:743:6:SystemClock_Config	88	static
+../Core/Src/main.c:796:13:MX_GPIO_Init	24	static
+../Core/Src/main.c:813:9:TIM1_UP_TIM10_IRQHandler	4	static
+../Core/Src/main.c:845:9:EXTI1_IRQHandler	8	static
+../Core/Src/main.c:881:8:EXTI3_IRQHandler	4	static
+../Core/Src/main.c:891:8:EXTI9_5_IRQHandler	192	static,ignoring_inline_asm
+../Core/Src/main.c:982:6:Error_Handler	4	static,ignoring_inline_asm
