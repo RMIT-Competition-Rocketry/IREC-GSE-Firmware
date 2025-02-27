@@ -846,9 +846,9 @@ static void MX_GPIO_Init(void)
 			CH1_OP.port->ODR |= CH1_Operate;
 			//PURGE state
 
-			//state = 0;
-
+			state &= ~0xFE; //0b11111110: all bits are bit-masked 0 except for system on
 			hardware_timer_count = 0;
+
 			while((TIM1->SR & TIM_SR_UIF)==0); //wait for hardware interrupt flag to be updated
 			TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register
 		}
