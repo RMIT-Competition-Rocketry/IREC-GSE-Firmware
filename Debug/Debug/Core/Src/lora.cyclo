@@ -1,0 +1,8 @@
+../Core/Src/lora.c:44:6:LoRa_init	1
+../Core/Src/lora.c:97:6:_LoRa_setMode	1
+../Core/Src/lora.c:125:13:LoRa_AVData	1
+../Core/Src/lora.c:165:13:LoRa_GPSData	1
+../Core/Src/lora.c:183:13:LoRa_PayloadData	1
+../Core/Src/lora.c:210:6:LoRa_transmit	2
+../Core/Src/lora.c:228:6:LoRa_writeRegister	1
+../Core/Src/lora.c:239:9:LoRa_readRegister	1
