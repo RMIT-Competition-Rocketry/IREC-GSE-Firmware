@@ -54,7 +54,7 @@ extern "C" {
 #define FLASH_PORT GPIOE
 #define FLASH_CS GPIO_ODR_OD11
 #define FLASH_PAGE_SIZE 256
-#define FLASH_PAGE_SIZE 65536
+#define FLASH_PAGE_COUNT 65536
 
 #define LOAD_CELL_PORT GPIOA
 #define LOAD_CELL_CS GPIO_ODR_OD2
@@ -150,14 +150,17 @@ void Error_Handler(void);
 #define SYSTEM_ACTIVATED 0x01
 
 
-
-
-
-
-
 #define LORA_PORT GPIOG
 #define LORA_CS GPIO_ODR_OD11
 #define LORA_DIO0 GPIO_ODR_OD7 //DIO0 GPIO
+
+typedef enum{
+	ERROR_NONE = 0,
+	ERROR_INVALID_PACKET_ID,
+	ERROR_RX_FAILED,
+	ERROR_TX_FAILED,
+	ERROR_SYSTEM_STATE_FAILED
+}ErrorCode;
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

@@ -53,7 +53,7 @@ uint8_t hardware_timer_count = 0;
 uint8_t dump_flag = 0;
 uint8_t TX_Packet_Flag = 0; //ID 7
 volatile uint8_t data_thermo[2];
-
+uint8_t lora_error = 0; //mainly for lora comms error state
  	 //Error Code definitions here;
 /*
  * ->
@@ -69,7 +69,7 @@ static void MX_GPIO_Init(void);
 static void MX_TIM6_Init(void);
 /* USER CODE BEGIN PFP */
 
- static LoRa lora;
+ static SX1272_t lora;
  static LoRa_Packet GSE_GCS1;
  static LoRa_Packet GSE_GCS2;
  static LoRa_Packet GSE_Command;
@@ -202,7 +202,7 @@ int main(void)
 //Interrupt Mapped to PE4 ->Ambient temperature alert
 
   GPIO_init_interrupt(&DUM_SW, GPIOB, GPIO_MODER_INPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_DOWN, 0x01);
-  DUM_SW->port->ODR |= DUMP_SW;//IMMEDIATELY setting high
+  DUM_SW.port->ODR |= DUMP_SW;//IMMEDIATELY setting high
   //this GPIO interrupt was specifically made to operate on the falling edge!
   NVIC_SetPriority(EXTI1_IRQn,8);
   	  //PB1-> DUMP_SW (purge??)
@@ -269,7 +269,7 @@ int main(void)
 
 
   //LoRa initialisation
-  LoRa_init(&lora,"GSE_LORA", LORA_PORT, LORA_CS, BW500, SF9, CR5);
+  SX1272_init(&lora,"GSE_LORA", LORA_PORT, LORA_CS, SX1272_BW500, SX1272_SF9, SX1272_CR5);
   //sensor configuration
   ADT75ARMZ_init(&temp_sensor, I2C1, GPIOF,TEMPERATURE_SENSOR, 0x48);
   MCP96RL00_EMX_1_init(&thermocouple_1,I2C1, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, 0x60);
@@ -396,7 +396,7 @@ else
 			 * B4: IGNITION_ISO_SW
 			 * B3: N20_DEADMAN_SW
 			 * B2: O2_DEADMAN_SW
-			 * B1: IGNITION_ISO_SW
+			 * B1: IGNITION_DEAD_SW
 			 * B0: Activate_SYS_SW (MUST BE 1) if changed at this point, sys must abort
 			 */
 			//Turn off GPIO and Timer interrupts
@@ -426,6 +426,16 @@ else
 			NVIC_SetPriority(TIM1_UP_TIM10_IRQn,10);
 			//re-enable interrupt callbacks for LoRa
 			switch_case_state = 4;
+			/*@param: state
+			 * B7: Manual Purge
+			 * B6: O2 Fill
+			 * B5: Switch Selector (redundant)
+			 * B4: N2O fill
+			 * B3: Ignition Fire
+			 * B2: Ignition Selected
+			 * B1: Gas Filled selected
+			 * B0: System Activated
+			 */
 			break;
 //**************************REMOTE ACCESS*************************************************************
 		case 4:
@@ -442,7 +452,7 @@ else
 
 						else if((state & GAS_FILLED_SELECTED) == 0) //0 to indicate a successful -> skip this when bit 1 is a 1
 											{
-												if((state & IGNITION_SELECTED) ==0) //IGNITE SELECTED -> BIT2
+												if((state & IGNITION_SELECTED) == 0) //IGNITE SELECTED -> BIT2
 												{
 													switch_case_state = 9; //go into neutral state!
 													break;
@@ -450,17 +460,17 @@ else
 												else //if bit 2 is a 1
 												{
 													//Close relays here!
-													CH3_ARM.port->ODR |= (CH3_Arm & 0x00)<<10;
-													CH3_OP.port->ODR |= (CH3_Operate & 0x00)<<9;
-													led_n2o.port->ODR|= (N2O_LED & 0x00) << 5;
+													CH3_ARM.port->ODR &= ~(CH3_Arm);
+													CH3_OP.port->ODR &= ~(CH3_Operate);
+													led_n2o.port->ODR &= ~(N2O_LED);
 
-													led_O2.port->ODR|=(O2_LED & 0x00) << 6;
-													CH2_ARM.port->ODR |= (CH2_Arm & 0x00)<<14;
-													CH2_OP.port->ODR |= (CH2_Operate & 0x00)<<13;
+													led_O2.port->ODR&= ~(O2_LED);
+													CH2_ARM.port->ODR &= ~(CH2_Arm);
+													CH2_OP.port->ODR &= ~(CH2_Operate);
 
 
 													Ignition1_ARM.port->ODR |= IGNITION1_ARM;
-													Ignition2_ARM.port->ODR |= IGNITION2_ARM;
+													//Ignition2_ARM.port->ODR |= IGNITION2_ARM;
 													//ARM both pins
 													if((state & IGNITION_FIRE) != IGNITION_FIRE) //IGNITE OP -> BIT 3
 													{ //if bit 3 is a 0
@@ -529,7 +539,7 @@ else
 		case 0x0F:
 			if((state_local & ACTIVATE_SW) != ACTIVATE_SW) //if the system is not active
 			{
-				led_power.port->ODR |= (0x00 & PWR_LED);
+				led_power.port->ODR &= ~(PWR_LED);
 				switch_case_state = 10;
 				break;
 			}
@@ -546,13 +556,13 @@ else
 					//does nothing when false condition is set - ie when dump button has not been pressed!
 
 					led_power.port->ODR |= PWR_LED;
-					CH3_ARM.port->ODR |= (CH3_Arm & 0x00)<<10;
-					CH3_OP.port->ODR |= (CH3_Operate & 0x00)<<9;
-					led_n2o.port->ODR|= (N2O_LED & 0x00) << 5;
+					CH3_ARM.port->ODR &= ~(CH3_Arm);
+					CH3_OP.port->ODR &= ~(CH3_Operate);
+					led_n2o.port->ODR &= ~(N2O_LED);
 
-					led_O2.port->ODR|=(O2_LED & 0x00) << 6;
-					CH2_ARM.port->ODR |= (CH2_Arm & 0x00)<<14;
-					CH2_OP.port->ODR |= (CH2_Operate & 0x00)<<13;
+					led_O2.port->ODR &= ~(O2_LED);
+					CH2_ARM.port->ODR &= ~(CH2_Arm);
+					CH2_OP.port->ODR &= ~(CH2_Operate);
 
 
 					Ignition1_ARM.port->ODR |= IGNITION1_ARM;
@@ -577,8 +587,8 @@ else
 
 				//if local dump flag has been triggered REGARDLESS of input control state!
 
-				led_O2.port->ODR|=((O2_LED & 0x00) << O2_LED);
-				led_n2o.port->ODR|=((N2O_LED & 0x00) << N2O_LED);
+				led_O2.port->ODR &= ~(O2_LED);
+				led_n2o.port->ODR &= ~(N2O_LED);
 				switch_case_state = 10;
 				break;
 			}
@@ -589,7 +599,7 @@ else
 				if(dump_flag == 1){switch_case_state = 0; dump_flag = 0; break;}
 				else{__asm("NOP");}
 
-					led_n2o.port->ODR|=N2O_LED;
+					led_n2o.port->ODR |=N2O_LED;
 					if((state_local& N2O_DEADMAN_SW) == N2O_DEADMAN_SW)
 					{
 						switch_case_state = 7;
@@ -597,7 +607,7 @@ else
 					}
 					else
 					{
-						led_n2o.port->ODR|=((N2O_LED & 0x00) << N2O_LED);
+						led_n2o.port->ODR &= ~(N2O_LED);
 					}
 				}
 			else if((state_local & O2_ISO_SW) == O2_ISO_SW &&
@@ -605,7 +615,7 @@ else
 				{
 				if(dump_flag == 1){switch_case_state = 0; dump_flag = 0; break;}
 				else{__asm("NOP");}
-					led_O2.port->ODR |=O2_LED;
+					led_O2.port->ODR |= O2_LED;
 					if((state_local & O2_DEADMAN_SW) == O2_DEADMAN_SW)
 					{
 						switch_case_state = 8;
@@ -613,7 +623,7 @@ else
 					}
 					else
 					{
-						led_O2.port->ODR|=((O2_LED & 0x00) << O2_LED);
+						led_O2.port->ODR &= ~(O2_LED);
 					}
 				}
 		else
@@ -629,7 +639,7 @@ else
 			//N20 Fill State
 			if(CH3_MON.port->IDR != CH3_Cont)
 			{
-				led_n2o.port->ODR|=((N2O_LED & 0x00) << N2O_LED);
+				led_n2o.port->ODR &= ~(N2O_LED);
 				error = 0x01 << 14;
 				switch_case_state = 0;
 				break;
@@ -648,13 +658,13 @@ else
 			//O2 FILL
 			if(CH2_MON.port->IDR != CH2_Cont)
 			{
-				led_O2.port->ODR|=((O2_LED & 0x00) << O2_LED);
+				led_O2.port->ODR &= ~(O2_LED);
 				error = 0x01 << 13;
 				switch_case_state = 0;
 				break;
 			}
 			else{
-				error = 0x00 << 13;
+				error = 0x00 << 13; //unasserts error flag
 				led_O2.port->ODR|=O2_LED;
 				CH2_ARM.port->ODR |= CH2_Arm;
 				CH2_OP.port->ODR |= CH2_Operate;
@@ -666,14 +676,15 @@ else
 		case 9:
 			//neutral state
 			//Turn OFF ignition coil relays
-			Ignition1_ARM.port->ODR |= IGNITION1_ARM_OFF;
-			Ignition2_ARM.port->ODR |= IGNITION2_ARM_OFF;
-			Ignition1_OP.port->ODR |= IGNITION1_OP_OFF;
-			Ignition2_OP.port->ODR |= IGNITION2_OP_OFF;
+			Ignition1_ARM.port->ODR &= ~(IGNITION1_ARM);
+		//	Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
+			Ignition1_OP.port->ODR &= ~(IGNITION1_OP);
+		//	Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
 
-			//turn off relays purging gas!
-			CH1_OP.port->ODR |= CH1_Operate_OFF;
-			CH1_ARM.port->ODR |= CH1_Arm_OFF;
+
+			//turn off relays purging gas! (gas can be filled)
+			CH1_OP.port->ODR |= (CH1_Operate_OFF);
+			CH1_ARM.port->ODR |= (CH1_Arm_OFF);
 
 
 			switch_case_state = 0;
@@ -685,30 +696,31 @@ else
 			//output a high to stop purging!
 			//__disable_irq(); //during purge state, no other interference can disturb the purge state!
 
-			CH3_ARM.port->ODR |= (CH3_Arm & 0x00)<<10;
-			CH3_OP.port->ODR |= (CH3_Operate & 0x00)<<9;
-			led_n2o.port->ODR|= (N2O_LED & 0x00) << 5;
 
-			led_O2.port->ODR|=(O2_LED & 0x00) << 6;
-			CH2_ARM.port->ODR |= (CH2_Arm & 0x00)<<14;
-			CH2_OP.port->ODR |= (CH2_Operate & 0x00)<<13;
+			CH3_ARM.port->ODR &= ~(CH3_Arm);
+			CH3_OP.port->ODR &= ~(CH3_Operate);
+			led_n2o.port->ODR &= ~(N2O_LED);
+
+			led_O2.port->ODR &= ~(O2_LED);
+			CH2_ARM.port->ODR &= ~(CH2_Arm);
+			CH2_OP.port->ODR &= ~(CH2_Operate);
 
 
-			CH1_ARM.port->ODR |= CH1_Arm;
-			CH1_OP.port->ODR |= CH1_Operate;
+			CH1_ARM.port->ODR &= CH1_Arm;
+			CH1_OP.port->ODR &= CH1_Operate;
 			//__enable_irq();
 			//PURGE state will be left on UNTIL further notice as indicated by state var!
 			switch_case_state = 0;
 			break;
 
 		case 11: //O2 -> N20 Shutoff state (when O2 and N2O state are triggered at the same time)
-			CH3_ARM.port->ODR |= (CH3_Arm & 0x00)<<10;
-			CH3_OP.port->ODR |= (CH3_Operate & 0x00)<<9;
-			led_n2o.port->ODR|= (N2O_LED & 0x00) << 5;
+			CH3_ARM.port->ODR &= ~(CH3_Arm);
+			CH3_OP.port->ODR &= ~(CH3_Operate);
+			led_n2o.port->ODR &= ~(N2O_LED);
 
-			led_O2.port->ODR|=(O2_LED & 0x00) << 6;
-			CH2_ARM.port->ODR |= (CH2_Arm & 0x00)<<14;
-			CH2_OP.port->ODR |= (CH2_Operate & 0x00)<<13;
+			led_O2.port->ODR &= ~(O2_LED);
+			CH2_ARM.port->ODR &= ~(CH2_Arm);
+			CH2_OP.port->ODR &= ~(CH2_Operate);
 
 			switch_case_state = 0;
 			break;
@@ -719,8 +731,8 @@ else
 		//	Ignition2_OP.port->ODR |= IGNITION2_OP;
 			switch_case_state = 0;
 			delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-			Ignition1_OP.port->ODR |= IGNITION1_OP_OFF;
-			state |= (0x02 <<2); //this if more so for remote control 0bxxxx11xx become 0
+			Ignition1_OP.port->ODR &= ~(IGNITION1_OP);
+			state &= ~(0x02 <<2); //this if more so for remote control 0bxxxx11xx become 0
 			//turns of the ignite state once done!
 			//state cannot be triggered more than once sequentially!
 			__enable_irq();
@@ -816,25 +828,25 @@ static void MX_GPIO_Init(void)
 		if(hardware_timer_count<5)
 		{
 			   //Hardware Timer interrupt callback for LoRa RX
-				while((TIM1->SR & TIM_SR_UIF)==0); //wait for hardware interrupt flag to be updated
+				while((TIM1->SR & TIM_SR_UIF) == 0); //wait for hardware interrupt flag to be updated
 				TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register
 		}
 		else
 		{
-			CH3_ARM.port->ODR |= (CH3_Arm & 0x00)<<10;
-			CH3_OP.port->ODR |= (CH3_Operate & 0x00)<<9;
-			led_n2o.port->ODR|= (N2O_LED & 0x00) << 5;
+			CH3_ARM.port->ODR &= ~(CH3_Arm);
+			CH3_OP.port->ODR &= ~(CH3_Operate);
+			led_n2o.port->ODR &= ~(N2O_LED);
 
-			led_O2.port->ODR|=(O2_LED & 0x00) << 6;
-			CH2_ARM.port->ODR |= (CH2_Arm & 0x00)<<14;
-			CH2_OP.port->ODR |= (CH2_Operate & 0x00)<<13;
+			led_O2.port->ODR &= ~(O2_LED);
+			CH2_ARM.port->ODR &= ~(CH2_Arm);
+			CH2_OP.port->ODR &= ~(CH2_Operate);
 
 
 			CH1_ARM.port->ODR |= CH1_Arm;
 			CH1_OP.port->ODR |= CH1_Operate;
 			//PURGE state
 
-			state = 0;
+			//state = 0;
 
 			hardware_timer_count = 0;
 			while((TIM1->SR & TIM_SR_UIF)==0); //wait for hardware interrupt flag to be updated
@@ -844,7 +856,7 @@ static void MX_GPIO_Init(void)
 
    void EXTI1_IRQHandler(void)
    {
-	delay_software_us(100); //100us delay to prevent debouncing
+	delay_software_us(200); //200us delay to prevent debouncing
    	if(EXTI->PR & EXTI_PR_PR1) //if the rising edge has been detected by pin 2
    	{
    		EXTI->PR &= ~EXTI_PR_PR1; //resets the flag
@@ -854,16 +866,16 @@ static void MX_GPIO_Init(void)
    		if((local_control_SW.port->IDR & LOCAL_CONTROL_SW) == LOCAL_CONTROL_SW)
    		{
    			EXTI->PR &= ~EXTI_PR_PR1; //resets the flag
-			CH3_ARM.port->ODR |= (CH3_Arm & 0x00)<<10;
-			CH3_OP.port->ODR |= (CH3_Operate & 0x00)<<9;
-			led_n2o.port->ODR|= (N2O_LED & 0x00) << 5;
+			CH3_ARM.port->ODR &= ~(CH3_Arm);
+			CH3_OP.port->ODR &= ~(CH3_Operate);
+			led_n2o.port->ODR &= ~(N2O_LED);
 
-			led_O2.port->ODR|=(O2_LED & 0x00) << 6;
-			CH2_ARM.port->ODR |= (CH2_Arm & 0x00)<<14;
-			CH2_OP.port->ODR |= (CH2_Operate & 0x00)<<13;
+			led_O2.port->ODR &= ~(O2_LED);
+			CH2_ARM.port->ODR &= ~(CH2_Arm);
+			CH2_OP.port->ODR &= ~(CH2_Operate);
 
-			CH1_ARM.port->ODR |= CH1_Arm;
-			CH1_OP.port->ODR |= CH1_Operate;
+			CH1_ARM.port->ODR &= CH1_Arm;
+			CH1_OP.port->ODR &= CH1_Operate;
 			//__enable_irq();
 			//PURGE state will be left on UNTIL further notice as indicated by state var!
 			switch_case_state = 0; //will reset state machine if interrupt is triggered
@@ -900,37 +912,38 @@ static void MX_GPIO_Init(void)
 	   *  5) Proceed
 	   */
 	  uint8_t transmit_state = 0;
-	  uint8_t *pointerdata[32];
+	  uint8_t pointerdata[32];
   	if(EXTI->PR & 0x1F0) //if the rising edge has been detected by pins 5:9
   	{
   		EXTI->PR &= ~0x1F0; //resets the flag
-  		_LoRa_setMode(&lora, STDBY); //front end is disabled
 
-  		LoRa_receive(&lora, pointerdata);
+  		SX1272_startReceive(&lora);
+  		SX1272_readReceive(&lora, pointerdata, LORA_MSG_PAYLOAD_LENGTH);
+
   		GSE_Command.id= pointerdata[0];
   		GSE_Command.data[0]= pointerdata[1];
   		GSE_Command.data[1]= pointerdata[2];
   		if(GSE_Command.id != 0x02)
   		{
+  			lora_error = ERROR_INVALID_PACKET_ID;
+  			hardware_timer_count++;
   			__asm("NOP");
-  			//packet lost counter increment!
 
   		}
   		else if((GSE_Command.data[0] & 0x01) != 1) //ID is correct
 		{
   			//IF SYSTEM ON bit is 0
-  			__asm("NOP");
   			state = 0; //make sure everything is OFF
   			//make sure LED is OFF as well!
   			led_power.port->ODR |= (PWR_LED & 0x00);
   		}
   		else //ID is correct AND state bit0 == 1
   		{
-
   			led_power.port->ODR |= PWR_LED; //Turn ON LED
   			state = GSE_Command.data[0];
   			hardware_timer_count = 0;
-
+  			uint8_t transmit_state = 0;
+  	        // Transmit response based on TX_Packet_Flag
   			switch(TX_Packet_Flag)
   			{
   			case 0:
@@ -941,15 +954,18 @@ static void MX_GPIO_Init(void)
 						&thermocouple_3,
 						&thermocouple_4,
 						error);
-  				LoRa_transmit(&lora, packet_0.data);
+
+  				SX1272_transmit(&lora, packet_0.data);
   		  		do
   		  		{
-  		  			transmit_state = LoRa_readRegister(&lora, LORA_REG_IRQ_FLAGS);
-  		  		}while((transmit_state & 0) == 0x00); //will continue if transmit state and 0x08 are the same or 0
+  		  			transmit_state = SX1272_readRegister(&lora, SX1272_REG_IRQ_FLAGS);
+  		  		}while((transmit_state & 0x08) == 0x00); //will continue if transmit state and 0x08 are the same or 0
   		  		//wait for Tx complete!
-  		  		  LoRa_writeRegister(&lora, LORA_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
+
+
+  		  		  SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
   		  		  TX_Packet_Flag = 1;
-  		  		_LoRa_setMode(&lora, RXCONTINUOUS); //resetting flag back to RXCONTINUOUS mode after flag has been set!
+  		  		_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS); //resetting flag back to RXCONTINUOUS mode after flag has been set!
   		  		break;
 
 
@@ -959,16 +975,20 @@ static void MX_GPIO_Init(void)
   						&LoadCells,
 						&temp_sensor,
 						error);
-	  			LoRa_transmit(&lora, packet_1.data);
+	  			SX1272_transmit(&lora, packet_1.data);
+
   		  		do
   		  		{ //continuously poll status register for TX complete!
-  		  			uint8_t transmit_state = LoRa_readRegister(&lora, LORA_REG_IRQ_FLAGS);
-  		  		}while((transmit_state & 0) == 0x00);
+  		  			transmit_state = SX1272_readRegister(&lora, SX1272_REG_IRQ_FLAGS);
+  		  		}while((transmit_state & 0x08) == 0x00);
 
-  		  			LoRa_writeRegister(&lora, LORA_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
+  		  			SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
   		  			TX_Packet_Flag = 0;
-  		  		_LoRa_setMode(&lora, RXCONTINUOUS);
+  		  		_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS);
   		  		break;
+  		  		//the program should NEVER end up here
+  			default:
+  				lora_error = ERROR_SYSTEM_STATE_FAILED;
   			}
   		}
   	}
