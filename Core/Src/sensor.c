@@ -12,7 +12,7 @@
 
 void ADC124S021_init(ADC124S021 *adc, SensorType SensorType, GPIO_TypeDef *port, unsigned long cs)
 {
-	SPI_init(&adc->base , SensorType, SPI1, MODE16,port,cs);
+	SPI_init(&adc->base , SensorType, SPI1, MODE16, port,cs);
 	adc->base;
 	adc->device = SensorType;
 	adc->extract = ADC124S021_extract;
@@ -26,12 +26,12 @@ switch(adc->device)
 case 0:
 	//loadcell
 	GPIOA->ODR &= ~(GPIO_ODR_OD2);
-	while(TIM7->SR & TIM_SR_UIF);
-		TIM7->SR |= 0 << TIM_SR_UIF_Pos; //clearing the UIF bit
+	while((TIM7->SR & TIM_SR_UIF)!=0);
+		TIM7->SR &= ~TIM_SR_UIF; //clearing the UIF bit
 	for(int i = 0; i<NUM_MUX; i++){ //might need to change
 
 			//this is to ensure the device has sampled and converted incoming data
-			adc->data_raw[i] = SPI_transmit(&adc, i<<3); //changing the control register
+			adc->data_raw[i] = SPI_transmit(&adc->base, i<<3); //changing the control register
 			//[0] = IN1 -> TRANSDUCER1
 			//[1] = IN2 -> TRANSDUCER1
 			//[2] = IN3 -> TRANSDUCER1
@@ -42,17 +42,21 @@ case 0:
 
 case 1://transducer
 	GPIOG->ODR &= ~(GPIO_ODR_OD4);
-	while(TIM7->SR & TIM_SR_UIF);
-		TIM7->SR |= 0 << TIM_SR_UIF_Pos; //clearing the UIF bit
+	while((TIM7->SR & TIM_SR_UIF)!=1);
+		TIM7->SR &= ~TIM_SR_UIF; //clearing the UIF bit
 
-	for(int i = 0; i<NUM_MUX; i++){ //might need to change
 			//this is to ensure the device has sampled and converted incoming data
-			adc->data_raw[i] = SPI_transmit(&adc, i<<3);
+		while(1){
+			adc->data_raw[0] = SPI_transmit(&adc->base,0);
+			adc->data_raw[1] = SPI_transmit(&adc->base,1<<3);
+			adc->data_raw[2] = SPI_transmit(&adc->base,2<<3);
+			adc->data_raw[3] = SPI_transmit(&adc->base,3<<3);
+		}
 			//[0] = IN1 -> LOADCELL1
 			//[1] = IN2 -> LOADCELL2
 			//[2] = IN3 -> LOADCELL3
 			//[3] = IN4 -> LOADCELL4
-		}
+
 	GPIOG->ODR |= GPIO_ODR_OD4;
 	break;
 	}
@@ -62,7 +66,7 @@ void ADC124S021_process(ADC124S021 * adc)
 {
 	//throw this into a LPF
 	for(int i = 0; i<4; i++){
-		adc->data_processed[i] = 0.15*adc->data_processed[i] + (1-0.15)*adc->data_raw[i];
+		adc->data_processed[i] = 0.15f*adc->data_processed[i] + (1-0.15f)*adc->data_raw[i];
 		//data_processed[0] = input 1
 		//data_processed[1] = input 2
 		//data_processed[2] = input 3
@@ -76,18 +80,19 @@ void ADC124S021_process(ADC124S021 * adc)
 				{
 					Converter_load.post_op  = adc->data_processed[i];
 					Converter_load.mass_int = Converter_load.post_op;
-					adc->Converted_Value_LoadCell[i] = (Converter_load.mass_int/(50/4096));
+					adc->Converted_Value_LoadCell[i] = (Converter_load.mass_int/(50.0f/4096.0f));
 					//output for each channel will be in KG
 				}
 				break;
 
 			case 1: //transducer
-				union{float mass; uint16_t post_op; int mass_int;}Converter_trans;
+				typedef struct{float mass; uint16_t post_op; int mass_int;}Converter_trans;
+				Converter_trans trans = {};
 				for(int i = 0; i<4; i++)
 								{
-									Converter_trans.post_op  = adc->data_processed[i];
-									Converter_trans.mass_int = Converter_trans.post_op;
-									adc->Converted_Value_Transducer[i] = (Converter_trans.mass_int/(300/4096));
+									trans.post_op  = adc->data_processed[i];
+									trans.mass_int = trans.post_op;
+									adc->Converted_Value_Transducer[i] = (trans.mass_int/(300.0f/4096.0f));
 									//output for each channel will be in bar of pressure
 								}
 				break;

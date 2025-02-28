@@ -54,6 +54,7 @@ void SX1272_init(
   lora->readReceive  = SX1272_readReceive;
   lora->clearIRQ     = SX1272_clearIRQ;
 
+
   _SX1272_setMode(lora, SX1272_MODE_SLEEP); // Set mode to sleep
 
 
@@ -508,34 +509,34 @@ void SX1272_clearIRQ(SX1272_t *lora, uint8_t flags) {
 /*************************************** INTERFACE METHODS ****************************************/
 
 void SX1272_writeRegister(SX1272_t *lora, uint8_t address, uint8_t data) {
-  SPI *spi = lora->base;
+  SPI spi = lora->base;
 
   // Pull CS low
-  spi->port->ODR &= ~spi->cs;
+  spi.port->ODR &= ~spi.cs;
 
   // Send write data and address
   uint8_t payload = address | 0x80; // Load payload with address and write command
-  spi->transmit(spi, payload);      // Transmit payload
-  spi->transmit(spi, data);         // Transmit write data
+  spi.transmit(&spi, payload);      // Transmit payload
+  spi.transmit(&spi, data);         // Transmit write data
 
   // Set CS high
-  spi->port->ODR |= spi->cs;
+  spi.port->ODR |= spi.cs;
 }
 
 uint8_t SX1272_readRegister(SX1272_t *lora, uint8_t address) {
   uint8_t response = 0;
-  SPI *spi         = lora->base;
+  SPI spi         = lora->base;
 
   // Pull CS low
-  spi->port->ODR &= ~spi->cs;
+  spi.port->ODR &= ~spi.cs;
 
   // Send write data and address
   uint8_t payload = address & 0x7F;              // Load payload with address and read command
-  response        = spi->transmit(spi, payload); // Transmit payload
-  response        = spi->transmit(spi, 0xFF);    // Transmit dummy data and reasd response
+  response        = spi.transmit(&spi, payload); // Transmit payload
+  response        = spi.transmit(&spi, 0xFF);    // Transmit dummy data and reasd response
 
   // Set CS high
-  spi->port->ODR |= spi->cs;
+  spi.port->ODR |= spi.cs;
 
   return response;
 }

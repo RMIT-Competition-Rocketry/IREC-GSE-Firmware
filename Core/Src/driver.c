@@ -83,11 +83,12 @@ void configureSPIBus1(void) //for ADC transducers
 	GPIOA->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED5_Msk | GPIO_OSPEEDR_OSPEED6_Msk | GPIO_OSPEEDR_OSPEED7_Msk);
 	GPIOA->OSPEEDR |= (0x02<<GPIO_OSPEEDR_OSPEED5_Pos | 0x02<<GPIO_OSPEEDR_OSPEED6_Pos | 0x02<<GPIO_OSPEEDR_OSPEED7_Pos); //fast mode
 
-	GPIOA->AFR[0] |= (0x05 << 4*5) | (0x06 << 4*6) | (0x06 << 4*7); //alternate function 5,6,6
+	GPIOA->AFR[0] |= (0x05 << 4*5) | (0x05 << 4*6) | (0x05 << 4*7); //alternate function 5,6,6
 
 	SPI1->CR1 &= (~(SPI_CR1_BR_Msk));
-	SPI1->CR1 |= (0x02 <<SPI_CR1_BR_Pos); //SPIclk/8
-	SPI1->CR1 &= (~(SPI_CR1_CPHA_Msk | SPI_CR1_CPOL_Msk)); //
+	SPI1->CR1 |= (0x04 <<SPI_CR1_BR_Pos); //SPIclk/32
+	SPI1->CR1 &= (~(SPI_CR1_CPHA_Msk)); //
+	SPI1->CR1 |= SPI_CR1_CPOL;
 
 	SPI1->CR1 |= SPI_CR1_MSTR; //sets SPI to master mode
 	SPI1->CR1 |= SPI_CR1_SSM | SPI_CR1_SSI; //set both bits;
@@ -124,7 +125,7 @@ void configureSPIBus3(void)// 	//for both additional 5V channels and LoRa
 
 	GPIOG->ODR |= (GPIO_ODR_OD9); //hold reset high for SX1272
 	TIM6->CR1 |= TIM_CR1_CEN; //enable TIM6
-	while((TIM6->CR1 & TIM_SR_UIF)==0); //wait for hardware registers to be updated
+//	while((TIM6->CR1 & TIM_SR_UIF)==0); //wait for hardware registers to be updated
 	GPIOG->ODR &= ~(GPIO_ODR_OD9); //resets reset on GPIO
 	TIM6->CR1 &= ~(TIM_SR_UIF); //clears UIF register
 
@@ -135,7 +136,7 @@ void configureSPIBus3(void)// 	//for both additional 5V channels and LoRa
 	GPIOG->ODR |= GPIO_ODR_OD11; //raise up CS
 
 	GPIOG->AFR[1] &= ~((GPIO_AFRH_AFRH5) | (GPIO_AFRH_AFRH6) | (GPIO_AFRH_AFRH7));// alternate functions for SPI3
-	GPIOG->AFR[1] |= ((0x05 << 4*4) | (0x04 << 5*4) | (0x04 << 6*4));// alternate functions for SPI3
+	GPIOG->AFR[1] |= ((0x06 << 4*4) | (0x06 << 5*4) | (0x06 << 6*4));// alternate functions for SPI3
 
 	SPI3->CR1 &= (~(SPI_CR1_BR_Msk));
 	SPI3->CR1 |= (0x02 <<SPI_CR1_BR_Pos); //SPIclk/8
@@ -145,7 +146,7 @@ void configureSPIBus3(void)// 	//for both additional 5V channels and LoRa
 	SPI3->CR1 |= SPI_CR1_SSM | SPI_CR1_SSI; //set both bits;
 
 	SPI3->CR1 &= ~(SPI_CR1_LSBFIRST); //MSB
-	SPI3->CR1 |= SPI_CR1_DFF;
+	//SPI3->CR1 |= SPI_CR1_DFF;
 	SPI3->CR1 &= (~(SPI_CR1_RXONLY | SPI_CR1_BIDIMODE));
 	SPI3->CR1 |= (0x01 << SPI_CR1_SPE_Pos); //enables the protocol
 	//rise and repeat for all SPI buses
@@ -185,7 +186,7 @@ void configureSPIBus4(void) //for flash memory storage
 	SPI4->CR1 &= ~(SPI_CR1_LSBFIRST); //MSB
 	SPI4->CR1 |= SPI_CR1_DFF;
 	SPI4->CR1 &= (~(SPI_CR1_RXONLY | SPI_CR1_BIDIMODE));
-	SPI4->CR1 |= (0x01 << SPI_CR1_SPE_Pos); //enables the protocol
+	SPI4->CR1 |= (SPI_CR1_SPE); //enables the protocol
 	//rise and repeat for all SPI buses
 }
 
@@ -194,8 +195,12 @@ void configureRCC_APB1(void)
 {
 	RCC->APB1ENR &= ~(RCC_APB1ENR_I2C1EN | RCC_APB1ENR_SPI3EN | RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM7EN);
 	RCC->APB1ENR |= RCC_APB1ENR_I2C1EN | RCC_APB1ENR_SPI3EN | RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM7EN;
-	RCC->APB1RSTR &= (uint16_t)~(RCC_APB1RSTR_TIM2RST_Msk | RCC_APB1RSTR_I2C1RST_Msk | RCC_APB1RSTR_SPI3RST_Msk | RCC_APB1RSTR_TIM6RST_Msk | RCC_APB1RSTR_TIM7RST_Msk);
-	RCC->APB1RSTR |= RCC_APB1RSTR_TIM2RST_Msk | RCC_APB1RSTR_I2C1RST_Msk |  RCC_APB1RSTR_SPI2RST_Msk |  RCC_APB1RSTR_SPI3RST_Msk | RCC_APB1RSTR_TIM6RST_Msk | RCC_APB1RSTR_TIM7RST_Msk;
+	RCC->APB1RSTR |= RCC_APB1RSTR_TIM2RST | RCC_APB1RSTR_I2C1RST |  RCC_APB1RSTR_SPI3RST | RCC_APB1RSTR_TIM6RST | RCC_APB1RSTR_TIM7RST;
+	__ASM("NOP");
+	__ASM("NOP");
+	RCC->APB1RSTR &= (uint16_t)~(RCC_APB1RSTR_TIM2RST | RCC_APB1RSTR_I2C1RST | RCC_APB1RSTR_SPI3RST | RCC_APB1RSTR_TIM6RST | RCC_APB1RSTR_TIM7RST);
+	__ASM("NOP");
+	__ASM("NOP");
 	//configure for more timers when necessary
 }
 
@@ -203,31 +208,36 @@ void configureRCC_APB2(void)
 {
 	RCC->APB2ENR &=  ~(RCC_APB2ENR_SPI1EN | RCC_APB2ENR_SPI4EN | RCC_APB2ENR_SYSCFGEN /*important for interrupts and other sys init*/| RCC_APB2ENR_USART6EN | RCC_APB2ENR_TIM1EN);
 	RCC->APB2ENR |=  RCC_APB2ENR_SPI1EN | RCC_APB2ENR_SPI4EN | RCC_APB2ENR_SYSCFGEN | RCC_APB2ENR_USART6EN | RCC_APB2ENR_TIM1EN;
-	RCC->APB2RSTR &= (uint16_t)~(RCC_APB2RSTR_SPI1RST_Msk | RCC_APB2RSTR_SPI4RST_Msk | RCC_APB2RSTR_SYSCFGRST_Msk | RCC_APB2RSTR_USART6RST_Msk | RCC_APB2RSTR_TIM11RST_Msk);
-	RCC->APB2RSTR |= RCC_APB2RSTR_SPI1RST_Msk | RCC_APB2RSTR_SPI4RST_Msk | RCC_APB2RSTR_SYSCFGRST_Msk | RCC_APB2RSTR_USART6RST_Msk | RCC_APB2RSTR_TIM11RST_Msk;
 
+	RCC->APB2RSTR |= RCC_APB2RSTR_SPI1RST | RCC_APB2RSTR_SPI4RST| RCC_APB2RSTR_SYSCFGRST | RCC_APB2RSTR_USART6RST | RCC_APB2RSTR_TIM11RST;
+	__ASM("NOP");
+	__ASM("NOP");
+	RCC->APB2RSTR &= (uint16_t)~(RCC_APB2RSTR_SPI1RST | RCC_APB2RSTR_SPI4RST| RCC_APB2RSTR_SYSCFGRST | RCC_APB2RSTR_USART6RST | RCC_APB2RSTR_TIM11RST);
+	__ASM("NOP");
+	__ASM("NOP");
 }
 void configureRCC_AHB1(void)
 {
 	RCC->AHB1ENR &= ~(RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_GPIOCEN | RCC_AHB1ENR_GPIODEN | RCC_AHB1ENR_GPIOEEN | RCC_AHB1ENR_GPIOFEN | RCC_AHB1ENR_GPIOGEN);
+	RCC->AHB1ENR |= (RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_GPIOCEN | RCC_AHB1ENR_GPIODEN | RCC_AHB1ENR_GPIOEEN | RCC_AHB1ENR_GPIOFEN | RCC_AHB1ENR_GPIOGEN);
+	__ASM("NOP");
+	__ASM("NOP");
 	RCC->AHB1RSTR &= (uint16_t)(~(RCC_AHB1RSTR_GPIOARST | RCC_AHB1RSTR_GPIOCRST | RCC_AHB1RSTR_GPIOCRST | RCC_AHB1RSTR_GPIODRST | RCC_AHB1RSTR_GPIOERST | RCC_AHB1RSTR_GPIOFRST | RCC_AHB1RSTR_GPIOGRST));
-	RCC->AHB1RSTR |= RCC_AHB1RSTR_GPIOARST | RCC_AHB1RSTR_GPIOCRST | RCC_AHB1RSTR_GPIOCRST | RCC_AHB1RSTR_GPIODRST | RCC_AHB1RSTR_GPIOERST | RCC_AHB1RSTR_GPIOFRST | RCC_AHB1RSTR_GPIOGRST;
-
 }
 
-void configure_TIM1(void) //operating at 10Hz or 100ms
+void configure_TIM1(void) //operating at 5Hz or 200ms
 {
 	TIM1->ARR &= ~(TIM_ARR_ARR_Msk);
 	TIM1->PSC &= ~(TIM_PSC_PSC_Msk);
-	TIM1->ARR |= (10001-1);
-	TIM1->PSC |= (1801-1); //same as australis to remain consistent!
+	TIM1->ARR |= (20001-1);
+	TIM1->PSC |= (1801-1);
 
 	//when the timer overflows, an interrupt will trigger!
 	TIM1->DIER &= !(TIM_DIER_UIE_Msk);
 	TIM1->DIER |= (TIM_DIER_UIE); //enable update event interrupt
 
 	TIM1->CR1 |= TIM_CR1_CEN; //enable TIM6
-	while((TIM6->SR & TIM_SR_UIF)==0); //wait for hardware registers to be updated
+	while((TIM1->SR & TIM_SR_UIF)==0); //wait for hardware registers to be updated
 	TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register
 
 	NVIC_SetPriority(TIM1_UP_TIM10_IRQn,1);

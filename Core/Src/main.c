@@ -53,6 +53,7 @@ uint8_t hardware_timer_count = 0;
 uint8_t dump_flag = 0;
 uint8_t TX_Packet_Flag = 0; //ID 7
 volatile uint8_t data_thermo[2];
+volatile uint8_t test_rx_interrupt =0;
 uint8_t lora_error = 0; //mainly for lora comms error state
  	 //Error Code definitions here;
 /*
@@ -156,6 +157,7 @@ int main(void)
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
+
 
   /* USER CODE BEGIN Init */
 
@@ -828,7 +830,6 @@ static void MX_GPIO_Init(void)
 		if(hardware_timer_count<5)
 		{
 			   //Hardware Timer interrupt callback for LoRa RX
-				while((TIM1->SR & TIM_SR_UIF) == 0); //wait for hardware interrupt flag to be updated
 				TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register
 		}
 		else
@@ -848,8 +849,6 @@ static void MX_GPIO_Init(void)
 
 			state &= ~0xFE; //0b11111110: all bits are bit-masked 0 except for system on
 			hardware_timer_count = 0;
-
-			while((TIM1->SR & TIM_SR_UIF)==0); //wait for hardware interrupt flag to be updated
 			TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register
 		}
    }
@@ -911,8 +910,10 @@ static void MX_GPIO_Init(void)
 	   *  4) Change state variable
 	   *  5) Proceed
 	   */
+	  test_rx_interrupt++;
 	  uint8_t transmit_state = 0;
 	  uint8_t pointerdata[32];
+
   	if(EXTI->PR & 0x1F0) //if the rising edge has been detected by pins 5:9
   	{
   		EXTI->PR &= ~0x1F0; //resets the flag

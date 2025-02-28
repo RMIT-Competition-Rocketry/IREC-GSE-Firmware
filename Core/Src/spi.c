@@ -27,7 +27,7 @@ static void SPI_receive16(SPI *, volatile uint16_t *);
  * =============================================================================== */
 void SPI_init(SPI *spi, DeviceType device, SPI_TypeDef *interface, DataFormat df, GPIO_TypeDef *port, unsigned long cs) {
   spi->device    = device;
-  spi->interface = interface;
+  spi->interface = interface; //should be interface 0x40003C00
   spi->port      = port;
   spi->cs        = cs;
 
@@ -46,11 +46,12 @@ void SPI_init(SPI *spi, DeviceType device, SPI_TypeDef *interface, DataFormat df
  **
  * =============================================================================== */
 uint16_t SPI_transmit(SPI *spi, uint16_t data) {
-  volatile uint16_t response;
+  volatile uint16_t response = 0;
   spi->send(spi, data);
   spi->receive(spi, &response);
   while (spi->interface->SR & SPI_SR_BSY);
   return response;
+
 }
 
 /* =============================================================================== */
@@ -64,7 +65,7 @@ uint16_t SPI_transmit(SPI *spi, uint16_t data) {
  * =============================================================================== */
 static void SPI_send8(SPI *spi, uint16_t data) {
   while (!(spi->interface->SR & SPI_SR_TXE));
-  spi->interface->DR = (uint8_t)data;
+  spi->interface->DR = (uint8_t) data;
 }
 
 static void SPI_send16(SPI *spi, uint16_t data) {
