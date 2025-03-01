@@ -46,7 +46,7 @@ void SX1272_init(
     SX1272_SpreadingFactor sf,
     SX1272_CodingRate cr
 ) {
-  SPI_init(&lora->base, COMM_LORA, SPI3, MODE8, port, cs);
+  SPI_init(&lora->base, COMM_LORA, SPI6, MODE8, port, cs);
   lora->standby      = SX1272_standby;
   lora->enableBoost  = SX1272_enableBoost;
   lora->transmit     = SX1272_transmit;
@@ -60,8 +60,8 @@ void SX1272_init(
 
   /*Set carrier frequency to 915.6MHz*/
   //MSB remains the same as default value of E4
-  SX1272_writeRegister(lora, SX1272_REG_FR_MIB, (0xE6)); //sets middle byte
-  SX1272_writeRegister(lora, SX1272_REG_FR_LSB, (0x67)); //sets last byte
+ // SX1272_writeRegister(lora, SX1272_REG_FR_MIB, (0xE6)); //sets middle byte
+  //SX1272_writeRegister(lora, SX1272_REG_FR_LSB, (0x67)); //sets last byte
 
   /* clang-format off */
   SX1272_writeRegister(lora, SX1272_REG_OP_MODE,
@@ -82,7 +82,8 @@ void SX1272_init(
   SX1272_writeRegister(lora, SX1272_REG_PAYLOAD_LENGTH, LORA_MSG_LENGTH);
   SX1272_writeRegister(lora, SX1272_REG_MAX_PAYLOAD_LENGTH, LORA_MSG_LENGTH);
 
-  _SX1272_setMode(lora, SX1272_MODE_RXCONTINUOUS); // Set mode to RXCONTINUOUS mode!
+  _SX1272_setMode(lora, SX1272_MODE_STDBY); // Set mode to Standby mode!
+
 }
 
 //Config LoRa carrier frequency - 915.6MHz
@@ -511,10 +512,10 @@ void SX1272_clearIRQ(SX1272_t *lora, uint8_t flags) {
 void SX1272_writeRegister(SX1272_t *lora, uint8_t address, uint8_t data) {
   SPI spi = lora->base;
 
-  // Pull CS low
+  //Pull CS low
   spi.port->ODR &= ~spi.cs;
 
-  // Send write data and address
+  //Send write data and address
   uint8_t payload = address | 0x80; // Load payload with address and write command
   spi.transmit(&spi, payload);      // Transmit payload
   spi.transmit(&spi, data);         // Transmit write data

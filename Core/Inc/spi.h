@@ -46,5 +46,5 @@ void SPI_init(SPI *, DeviceType, SPI_TypeDef *, DataFormat, GPIO_TypeDef *, unsi
 void SPI_send(SPI *, uint16_t);
 void SPI_receive(SPI *, volatile uint16_t *);
 uint16_t SPI_transmit(SPI *, uint16_t);
-
+uint16_t SPI6_TransmitReceive(uint16_t); //test for debugging purposes
 #endif /* INC_SPI_H_ */

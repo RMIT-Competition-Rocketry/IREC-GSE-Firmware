@@ -10,8 +10,8 @@
 
 void configureI2CBus1(void);
 void configureSPIBus1(void);
-void configureSPIBus2(void);
-void configureSPIBus3(void); //for both additional 5V channels and LoRa
+//void configureSPIBus2(void);
+void configureSPIBus6(void); //for both additional 5V channels and LoRa
 void configureSPIBus4(void); //for flash memory storage
 void configureRCC_APB1(void);
 void configureRCC_APB2(void);

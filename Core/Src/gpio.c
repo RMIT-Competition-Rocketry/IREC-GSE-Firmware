@@ -647,17 +647,19 @@ void GPIO_init_interrupt(GPIO *gpio, GPIO_TypeDef *port, uint8_t MODER, uint8_t 
 											EXTI->IMR |= EXTI_IMR_IM7;
 											NVIC_EnableIRQ(EXTI9_5_IRQn); //enable interrupt channel
 
+
+
 					}
 					else if(&port == (GPIO_TypeDef*)GPIOD)
 					{
 						SYSCFG->EXTICR[1] &= ~SYSCFG_EXTICR1_EXTI3_PD;
 						SYSCFG->EXTICR[1] |= SYSCFG_EXTICR1_EXTI3_PD;
-						EXTI->RTSR &= ~EXTI_RTSR_TR7_Msk;
-											EXTI->RTSR |= EXTI_RTSR_TR7;
+						EXTI->FTSR &= ~EXTI_RTSR_TR7_Msk;
+											EXTI->FTSR |= EXTI_RTSR_TR7;
 											EXTI->IMR &= ~EXTI_IMR_IM7;
 											EXTI->IMR |= EXTI_IMR_IM7;
 											NVIC_EnableIRQ(EXTI9_5_IRQn); //enable interrupt channel
-
+											//here is channel for loRa PD7
 					}
 					else if(&port == (GPIO_TypeDef*)GPIOE)
 					{

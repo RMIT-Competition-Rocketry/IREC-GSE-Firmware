@@ -26,7 +26,7 @@ void I2C_send(I2C *i2c, uint8_t address, uint8_t data)
 	while(!(i2c->interface->CR1 & I2C_CR1_START));
 
 	i2c->interface->DR |= address;
-	while(i2c->interface->SR1 & I2C_SR1_ADDR);//ACK bit
+	while(!(i2c->interface->SR1 & I2C_SR1_ADDR));//ACK bit
 		(void)i2c->interface->SR1; //clears the SR
 
 	while((i2c->interface->SR1 & I2C_SR1_TXE));
@@ -42,7 +42,7 @@ void I2C_sendBurst(I2C *i2c, uint8_t data[], uint8_t size, uint8_t address)
 	while(!(i2c->interface->CR1 & I2C_CR1_START));
 
 	i2c->interface->DR |= address;
-	while(i2c->interface->SR1 & I2C_SR1_ADDR);//ACK bit
+	while(!(i2c->interface->SR1 & I2C_SR1_ADDR));//ACK bit
 		(void)i2c->interface->SR1; //clears the SR
 
 for(int i = 0; i<size ; i++)
@@ -61,8 +61,10 @@ void I2C_receive(I2C *i2c, uint8_t address, volatile uint8_t *data)
 	while((i2c->interface->CR1 & I2C_CR1_START));
 
 	i2c->interface->DR |= address;
-	while(i2c->interface->SR1 & I2C_SR1_ADDR);//ACK bit
+	while((!i2c->interface->SR1 & I2C_SR1_ADDR));//ACK bit
 		(void)i2c->interface->SR1; //clears the SR
+		(void)i2c->interface->SR2; //clears the SR
+
 
 		while((i2c->interface->SR1 & I2C_SR1_RXNE)); //wait for receiver data register to be empty
 		data = i2c->interface->DR;
@@ -77,9 +79,10 @@ void I2C_receive(I2C *i2c, uint8_t address, volatile uint8_t *data)
 	i2c->interface->CR1 |= I2C_CR1_START;
 	while(!(i2c->interface->CR1 & I2C_CR1_START));
 
-	i2c->interface->DR |= address;
-	while(i2c->interface->SR1 & I2C_SR1_ADDR);//ACK bit
+	i2c->interface->DR |= address << 1;
+	while(!(i2c->interface->SR1 & I2C_SR1_ADDR));//ACK bit -> this hold indefinitely currently
 		(void)i2c->interface->SR1; //clears the SR
+		(void)i2c->interface->SR2; //clears the SR
 
 	for(uint8_t i = 0; i<size; i++){
 		while((i2c->interface->SR1 & I2C_SR1_RXNE)); //wait for receiver data register to be empty

@@ -55,6 +55,9 @@ uint8_t TX_Packet_Flag = 0; //ID 7
 volatile uint8_t data_thermo[2];
 volatile uint8_t test_rx_interrupt =0;
 uint8_t lora_error = 0; //mainly for lora comms error state
+bool triggerRX = false;
+uint8_t pointerdata[LORA_MSG_LENGTH];
+
  	 //Error Code definitions here;
 /*
  * ->
@@ -156,7 +159,9 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+
+
+	HAL_Init();
 
 
   /* USER CODE BEGIN Init */
@@ -173,7 +178,6 @@ int main(void)
 
   /* Configure the system clock */
   SystemClock_Config();
-
   /* USER CODE BEGIN SysInit */
   configureRCC_APB1();
   configureRCC_APB2();
@@ -184,8 +188,8 @@ int main(void)
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
   configureSPIBus1();
-  configureSPIBus3();
-  configureSPIBus4();
+  configureSPIBus6(); //SPI6
+ // configureSPIBus4();
   configureI2CBus1();
 //sensor configuration**********************************************
   //void ADT75ARMZ_init(ADT75ARMZ * i2c, I2C_TypeDef *interface, GPIO_TypeDef *port, Type TEMPERATURE_SENSOR, uint8_t address)
@@ -193,11 +197,10 @@ int main(void)
 
 
   //interrupt driven GPIO*******************************************
-  GPIO_init_interrupt(&LoRa_Rx_int, GPIOD, GPIO_MODER_INPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x07);
-  NVIC_DisableIRQ(EXTI9_5_IRQn); //easier than changing the function GPIO_init_interrupt
+
 //Interrupt Mapped PD7 -> SX DIO0
  //This will be enabled by default Upon the reading of the local switch state
-
+/*
   GPIO_init_interrupt(&temperature_alert, GPIOE, GPIO_MODER_INPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x03);
   NVIC_SetPriority(EXTI4_IRQn,11); //setting temperature warning alert as highest priority!
   //NVIC_DisableIRQ(EXTI4_IRQn);
@@ -208,7 +211,7 @@ int main(void)
   //this GPIO interrupt was specifically made to operate on the falling edge!
   NVIC_SetPriority(EXTI1_IRQn,8);
   	  //PB1-> DUMP_SW (purge??)
-
+*/
   //Normal GPIO initialisations*********************************************************
   //LEDs first
   	  	  //make the pullup/down selection be internal pulldowns to match external circuit
@@ -229,6 +232,7 @@ int main(void)
   //Control GPIO
   GPIO_init(&activate_SW, GPIOF, GPIO_MODER_INPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_DOWN, 0x0F);
   	  //PF15-> Activate_sys SW
+
   GPIO_init(&local_control_SW, GPIOF, GPIO_MODER_INPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_DOWN, 0x0E);
 	  //PF14-> Local_control SW
   GPIO_init(&N2O_SW, GPIOF, GPIO_MODER_INPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_DOWN, 0x0D);
@@ -270,8 +274,7 @@ int main(void)
 
 
 
-  //LoRa initialisation
-  SX1272_init(&lora,"GSE_LORA", LORA_PORT, LORA_CS, SX1272_BW500, SX1272_SF9, SX1272_CR5);
+
   //sensor configuration
   ADT75ARMZ_init(&temp_sensor, I2C1, GPIOF,TEMPERATURE_SENSOR, 0x48);
   MCP96RL00_EMX_1_init(&thermocouple_1,I2C1, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, 0x60);
@@ -315,11 +318,68 @@ int main(void)
  *  B1: Gas Filled
  *  B0: System Activate -> nothing can be done unless this bit is set
  */
+uint8_t LoRa_test_RX_Packets_received = 0;
+uint8_t LoRa_Frequency_MSB = 0;
+uint8_t LoRa_Frequency_MiB = 0;
+uint8_t LoRa_Frequency_LSB = 0;
 
+uint8_t RXDone_CHK = 0;
+
+uint8_t DIOmapping = 0;
+
+
+//INT_pin_input = (GPIOD->IDR & GPIO_IDR_IDR_7); //should be a non 0 value here!
+
+//Make sure interrupts are configured BEFORE interupts
+GPIO_init(&LoRa_Rx_int, GPIOD, GPIO_MODER_INPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x07);
+//NVIC_DisableIRQ(EXTI9_5_IRQn); //easier than changing the function GPIO_init_interrupt
+SYSCFG->EXTICR[1] &= ~SYSCFG_EXTICR1_EXTI3_PD;
+SYSCFG->EXTICR[1] |= SYSCFG_EXTICR1_EXTI3_PD;
+EXTI->FTSR &= ~EXTI_FTSR_TR7_Msk;
+EXTI->FTSR |= EXTI_FTSR_TR7;
+EXTI->RTSR &= ~EXTI_RTSR_TR7_Msk;
+EXTI->RTSR |= EXTI_RTSR_TR7;
+EXTI->IMR &= ~EXTI_IMR_IM7;
+EXTI->IMR |= EXTI_IMR_IM7;
+					//here is channel for loRa PD7
+//NVIC_EnableIRQ(EXTI9_5_IRQn);
+//NVIC_SetPriority(EXTI9_5_IRQn,9);
+//re-enable to turn on LoRa RX interrupt!
+
+SX1272_init(&lora,"GSE_LORA", LORA_PORT, LORA_CS, SX1272_BW500, SX1272_SF9, SX1272_CR5);
+SX1272_startReceive(&lora);
+SX1272_clearIRQ(&lora, SX1272_LORA_IRQ_RXDONE);
+//uint8_t DATAA = 0; -> for testing loRa
   while (1)
   {
+
 	switch(switch_case_state){
-	case 0: //This state is the default state -> reading sensor information and initial error checks!
+	case 0:
+		//This state is the default state -> reading sensor information and initial error checks!
+		//test function
+/*
+		LoRa_test_RX_Packets_received = SX1272_readRegister(&lora, 0x13);
+		LoRa_Frequency_MSB = SX1272_readRegister(&lora, 0x06);
+		LoRa_Frequency_MiB = SX1272_readRegister(&lora, 0x07);
+		LoRa_Frequency_LSB = SX1272_readRegister(&lora, 0x08);
+
+		DIOmapping = SX1272_readRegister(&lora, 0x40);
+
+		while (DATAA<10)
+		{
+			if(triggerInterrupt)
+			{
+				RXDone_CHK = SX1272_readRegister(&lora, 0x11);
+				triggerInterrupt = false;
+				DATAA = 0;
+			}
+			DATAA++;
+		}
+		*/
+
+
+		if(triggerRX){RX_Receive();}else{__asm("NOP");}
+
 		MCP96RL00_EMX_1_extract(&thermocouple_1, 0x60, data_thermo);
 		MCP96RL00_EMX_1_process(&thermocouple_1);
 		MCP96RL00_EMX_1_extract(&thermocouple_2, 0x61, data_thermo);//if variable data_thermo needs to be changed, make separate variables for each
@@ -340,8 +400,10 @@ int main(void)
 						else if(thermocouple_4.temperature >=35){error |=(0x01<<8);}
 					else{} //make it so nothing happens here -> proceed
 				}
-	ADC124S021_extract(&Transducers);
-	ADC124S021_process(&Transducers);
+
+//	ADC124S021_extract(&Transducers);
+//	ADC124S021_process(&Transducers);
+			if(triggerRX){RX_Receive();}else{}
 	if(Transducers.Converted_Value_Transducer[0] >=68){switch_case_state = 10; error |=(0x01<<7);}//error flag SPECIFICALLY for Transducer1..etc
 				else if(Transducers.Converted_Value_Transducer[1] >=68){switch_case_state = 10; error |=(0x01<<6); }//error flag SPECIFICALLY for Transducer2 check
 				else if(Transducers.Converted_Value_Transducer[2] >=68){switch_case_state = 10; error |=(0x01<<5);}//error flag SPECIFICALLY for Transducer3 check
@@ -353,8 +415,10 @@ int main(void)
 						else if(Transducers.Converted_Value_Transducer[3] >=65){error |=0x01;}
 					else{} //make it so nothing happens here -> proceed
 				}
-	ADC124S021_extract(&LoadCells);
-	ADC124S021_process(&LoadCells);
+			if(triggerRX){RX_Receive();}else{__asm("NOP");}
+
+//	ADC124S021_extract(&LoadCells);
+	//ADC124S021_process(&LoadCells);
 	if(LoadCells.Converted_Value_LoadCell[0] <4.1){error |=(0x01<<7);}//error flag SPECIFICALLY for Load1..etc
 				else if(LoadCells.Converted_Value_LoadCell[1] <4.1){error |=(0x01<<6);}//error flag SPECIFICALLY for Load2 check
 				else if(LoadCells.Converted_Value_LoadCell[2] <4.1){error |=(0x01<<5);}//error flag SPECIFICALLY for Load3 check
@@ -370,13 +434,16 @@ if(switch_case_state == 10)
 }
 else
 {
-	switch_case_state = 1; //input selector state
+	//switch_case_state = 1; //input selector state
 	break;
 }
+
 	/*
 	 *State input selection -> Whether System inputs will be controlled via remote LoRa comms or local switch inputs
 	 */
+
 		case 1:
+			if(triggerRX){RX_Receive();}else{__asm("NOP");}
 				if((local_control_SW.port->IDR & LOCAL_CONTROL_SW) == 0) //meaning local control is needed
 				{
 					led_local.port->ODR |= (0x00 & LOCAL_CONTROL_SW)<<14;
@@ -402,6 +469,7 @@ else
 			 * B0: Activate_SYS_SW (MUST BE 1) if changed at this point, sys must abort
 			 */
 			//Turn off GPIO and Timer interrupts
+
 			TIM1->CR1 |= (0x00 & TIM_CR1_CEN); //enable TIM6
 				while((TIM6->SR & TIM_SR_UIF)==0); //wait for hardware registers to be updated
 				TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register
@@ -422,6 +490,7 @@ else
 			break;
 			//remote Access
 		case 3:
+			if(triggerRX){RX_Receive();}else{__asm("NOP");} //
 			NVIC_EnableIRQ(EXTI9_5_IRQn);
 			NVIC_SetPriority(EXTI9_5_IRQn,9);
 			NVIC_EnableIRQ(TIM1_UP_TIM10_IRQn);
@@ -438,6 +507,7 @@ else
 			 * B1: Gas Filled selected
 			 * B0: System Activated
 			 */
+
 			break;
 //**************************REMOTE ACCESS*************************************************************
 		case 4:
@@ -746,7 +816,7 @@ else
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  } //while(1)
+  } ///while(1)
   /* USER CODE END 3 */
 }
 
@@ -910,90 +980,101 @@ static void MX_GPIO_Init(void)
 	   *  4) Change state variable
 	   *  5) Proceed
 	   */
-	  test_rx_interrupt++;
-	  uint8_t transmit_state = 0;
-	  uint8_t pointerdata[32];
-
-  	if(EXTI->PR & 0x1F0) //if the rising edge has been detected by pins 5:9
-  	{
-  		EXTI->PR &= ~0x1F0; //resets the flag
-
-  		SX1272_startReceive(&lora);
-  		SX1272_readReceive(&lora, pointerdata, LORA_MSG_PAYLOAD_LENGTH);
-
-  		GSE_Command.id= pointerdata[0];
-  		GSE_Command.data[0]= pointerdata[1];
-  		GSE_Command.data[1]= pointerdata[2];
-  		if(GSE_Command.id != 0x02)
-  		{
-  			lora_error = ERROR_INVALID_PACKET_ID;
-  			hardware_timer_count++;
-  			__asm("NOP");
-
-  		}
-  		else if((GSE_Command.data[0] & 0x01) != 1) //ID is correct
-		{
-  			//IF SYSTEM ON bit is 0
-  			state = 0; //make sure everything is OFF
-  			//make sure LED is OFF as well!
-  			led_power.port->ODR |= (PWR_LED & 0x00);
-  		}
-  		else //ID is correct AND state bit0 == 1
-  		{
-  			led_power.port->ODR |= PWR_LED; //Turn ON LED
-  			state = GSE_Command.data[0];
-  			hardware_timer_count = 0;
-  			uint8_t transmit_state = 0;
-  	        // Transmit response based on TX_Packet_Flag
-  			switch(TX_Packet_Flag)
-  			{
-  			case 0:
-  				LoRa_Packet packet_0 = LoRa_GSEData_1(0x06,
-  						&Transducers,
-						&thermocouple_1,
-						&thermocouple_2,
-						&thermocouple_3,
-						&thermocouple_4,
-						error);
-
-  				SX1272_transmit(&lora, packet_0.data);
-  		  		do
-  		  		{
-  		  			transmit_state = SX1272_readRegister(&lora, SX1272_REG_IRQ_FLAGS);
-  		  		}while((transmit_state & 0x08) == 0x00); //will continue if transmit state and 0x08 are the same or 0
-  		  		//wait for Tx complete!
+	//  test_rx_interrupt++;
+	 // uint8_t transmit_state = 0;
+ 	// SX1272_clearIRQ(&lora, SX1272_LORA_IRQ_RXDONE);
+	 EXTI->PR &= ~0x1F0; //resets the flag
+	 	triggerRX= true;
 
 
-  		  		  SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
-  		  		  TX_Packet_Flag = 1;
-  		  		_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS); //resetting flag back to RXCONTINUOUS mode after flag has been set!
-  		  		break;
-
-
-  			case 1:
-
-  				LoRa_Packet packet_1 = LoRa_GSEData_2(0x07,
-  						&LoadCells,
-						&temp_sensor,
-						error);
-	  			SX1272_transmit(&lora, packet_1.data);
-
-  		  		do
-  		  		{ //continuously poll status register for TX complete!
-  		  			transmit_state = SX1272_readRegister(&lora, SX1272_REG_IRQ_FLAGS);
-  		  		}while((transmit_state & 0x08) == 0x00);
-
-  		  			SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
-  		  			TX_Packet_Flag = 0;
-  		  		_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS);
-  		  		break;
-  		  		//the program should NEVER end up here
-  			default:
-  				lora_error = ERROR_SYSTEM_STATE_FAILED;
-  			}
-  		}
-  	}
   }
+
+void RX_Receive(void)
+{
+//	__disable_irq(); //uncomment after testing!!
+	__NVIC_DisableIRQ(EXTI9_5_IRQn); //uncomment after testing!!
+	bool RX_result = false;
+
+	RX_result = SX1272_readReceive(&lora, pointerdata, LORA_MSG_LENGTH);
+		triggerRX = false;
+		GSE_Command.id= pointerdata[0];
+		GSE_Command.data[0]= pointerdata[1];
+		GSE_Command.data[1]= pointerdata[2];
+		if(GSE_Command.id != 0x02)
+		{
+			lora_error = ERROR_INVALID_PACKET_ID;
+			hardware_timer_count++;
+			__asm("NOP");
+			__NVIC_EnableIRQ(EXTI9_5_IRQn);
+
+		}
+		else if((GSE_Command.data[0] & 0x01) != 1) //ID is correct
+	{
+			//IF SYSTEM ON bit is 0
+			state = 0; //make sure everything is OFF
+			//make sure LED is OFF as well!
+			led_power.port->ODR |= (PWR_LED & 0x00);
+		}
+		else //ID is correct AND state bit0 == 1
+		{
+			led_power.port->ODR |= PWR_LED; //Turn ON LED
+			state = GSE_Command.data[0];
+			hardware_timer_count = 0;
+			uint8_t transmit_state = 0;
+	        // Transmit response based on TX_Packet_Flag
+			switch(TX_Packet_Flag)
+			{
+			case 0:
+				LoRa_Packet packet_0 = LoRa_GSEData_1(0x06,
+						&Transducers,
+					&thermocouple_1,
+					&thermocouple_2,
+					&thermocouple_3,
+					&thermocouple_4,
+					error);
+
+				SX1272_transmit(&lora, packet_0.data);
+		  		do
+		  		{
+		  			transmit_state = SX1272_readRegister(&lora, SX1272_REG_IRQ_FLAGS);
+		  		}while((transmit_state & 0x08) == 0x00); //will continue if transmit state and 0x08 are the same or 0
+		  		//wait for Tx complete!
+
+
+		  		  SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
+		  		  TX_Packet_Flag = 1;
+		  		_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS); //resetting flag back to RXCONTINUOUS mode after flag has been set!
+				__NVIC_EnableIRQ(EXTI9_5_IRQn);
+
+
+		  		break;
+
+
+			case 1:
+
+				LoRa_Packet packet_1 = LoRa_GSEData_2(0x07,
+						&LoadCells,
+					&temp_sensor,
+					error);
+  			SX1272_transmit(&lora, packet_1.data);
+
+		  		do
+		  		{ //continuously poll status register for TX complete!
+		  			transmit_state = SX1272_readRegister(&lora, SX1272_REG_IRQ_FLAGS);
+		  		}while((transmit_state & 0x08) == 0x00);
+
+		  			SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
+		  			TX_Packet_Flag = 0;
+		  		_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS);
+				__NVIC_EnableIRQ(EXTI9_5_IRQn);
+		  		break;
+		  		//the program should NEVER end up here
+			default:
+				lora_error = ERROR_SYSTEM_STATE_FAILED;
+			}
+		}
+}
+
 /* USER CODE END 4 */
 
 /**

@@ -117,10 +117,10 @@ void Error_Handler(void);
 #define IGNITION2_OP GPIO_ODR_OD2
 #define IGNITION2_ARM GPIO_ODR_OD3
 
-#define IGNITION1_OP_OFF 0x00 <<14
-#define IGNITION1_ARM_OFF 0x00 <<15
-#define IGNITION2_OP_OFF 0x00 <<2
-#define IGNITION2_ARM_OFF 0x00<<3
+#define IGNITION1_OP_OFF 0x01 <<14
+#define IGNITION1_ARM_OFF 0x01 <<15
+#define IGNITION2_OP_OFF 0x01 <<2
+#define IGNITION2_ARM_OFF 0x01<<3
 
 
 //relays
@@ -149,7 +149,7 @@ void Error_Handler(void);
 #define GAS_FILLED_SELECTED 0x01 << 1
 #define SYSTEM_ACTIVATED 0x01
 
-
+void RX_Receive(void);
 #define LORA_PORT GPIOG
 #define LORA_CS GPIO_ODR_OD11
 #define LORA_DIO0 GPIO_ODR_OD7 //DIO0 GPIO

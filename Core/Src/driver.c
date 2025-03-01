@@ -76,7 +76,7 @@ void configureSPIBus1(void) //for ADC transducers
 	TIM7->ARR |= (40000-1);
 	TIM7->PSC |= (113-1);
 	TIM7->CR1 |= TIM_CR1_CEN; //enable TIM6
-	while(TIM7->SR & TIM_SR_UIF == 0);
+	while((TIM7->SR & TIM_SR_UIF) == 0);
 	TIM7->SR &= ~(TIM_SR_UIF); //clear UIF
 
 	GPIOA->OTYPER &= (uint16_t)~(GPIO_OTYPER_OT5_Msk | GPIO_OTYPER_OT6_Msk | GPIO_OTYPER_OT7_Msk ); //push pull de
@@ -87,8 +87,8 @@ void configureSPIBus1(void) //for ADC transducers
 
 	SPI1->CR1 &= (~(SPI_CR1_BR_Msk));
 	SPI1->CR1 |= (0x04 <<SPI_CR1_BR_Pos); //SPIclk/32
-	SPI1->CR1 &= (~(SPI_CR1_CPHA_Msk)); //
-	SPI1->CR1 |= SPI_CR1_CPOL;
+	SPI1->CR1 &= (~(SPI_CR1_CPHA)); //
+	SPI1->CR1 &= ~(SPI_CR1_CPOL);
 
 	SPI1->CR1 |= SPI_CR1_MSTR; //sets SPI to master mode
 	SPI1->CR1 |= SPI_CR1_SSM | SPI_CR1_SSI; //set both bits;
@@ -100,7 +100,7 @@ void configureSPIBus1(void) //for ADC transducers
 }
 
 
-void configureSPIBus3(void)// 	//for both additional 5V channels and LoRa
+void configureSPIBus6(void)// 	//for both additional 5V channels and LoRa
 {
 	GPIOG->MODER &= ~(GPIO_MODER_MODE12_Msk | GPIO_MODER_MODE13_Msk | GPIO_MODER_MODE14_Msk);
 	GPIOG->MODER |= (0x02 <<GPIO_MODER_MODE12_Pos | 0x02 << GPIO_MODER_MODE13_Pos | 0x02 << GPIO_MODER_MODE14_Pos);
@@ -136,20 +136,17 @@ void configureSPIBus3(void)// 	//for both additional 5V channels and LoRa
 	GPIOG->ODR |= GPIO_ODR_OD11; //raise up CS
 
 	GPIOG->AFR[1] &= ~((GPIO_AFRH_AFRH5) | (GPIO_AFRH_AFRH6) | (GPIO_AFRH_AFRH7));// alternate functions for SPI3
-	GPIOG->AFR[1] |= ((0x06 << 4*4) | (0x06 << 5*4) | (0x06 << 6*4));// alternate functions for SPI3
+	GPIOG->AFR[1] |= ((0x05 << 4*4) | (0x05 << 5*4) | (0x05 << 6*4));// alternate functions for SPI3
 
-	SPI3->CR1 &= (~(SPI_CR1_BR_Msk));
-	SPI3->CR1 |= (0x02 <<SPI_CR1_BR_Pos); //SPIclk/8
-	SPI3->CR1 &= (~(SPI_CR1_CPHA_Msk | SPI_CR1_CPOL_Msk)); //as per SX specifications
-
-	SPI3->CR1 |= SPI_CR1_MSTR; //sets SPI to master mode
-	SPI3->CR1 |= SPI_CR1_SSM | SPI_CR1_SSI; //set both bits;
-
-	SPI3->CR1 &= ~(SPI_CR1_LSBFIRST); //MSB
-	//SPI3->CR1 |= SPI_CR1_DFF;
-	SPI3->CR1 &= (~(SPI_CR1_RXONLY | SPI_CR1_BIDIMODE));
-	SPI3->CR1 |= (0x01 << SPI_CR1_SPE_Pos); //enables the protocol
-	//rise and repeat for all SPI buses
+    SPI6->CR1 &= ~(SPI_CR1_BR_Msk); // Clear baud rate bits
+    SPI6->CR1 |= (0x02 << SPI_CR1_BR_Pos); // SPIclk/8
+    SPI6->CR1 &= ~(SPI_CR1_CPHA_Msk | SPI_CR1_CPOL_Msk); // CPHA = 0, CPOL = 0
+    SPI6->CR1 |= SPI_CR1_MSTR; // Master mode
+    SPI6->CR1 |= SPI_CR1_SSM | SPI_CR1_SSI; // Software slave management
+    SPI6->CR1 &= ~(SPI_CR1_LSBFIRST); // MSB first
+   // SPI6->CR1 |= SPI_CR1_DFF; // 16-bit mode
+    SPI6->CR1 &= ~(SPI_CR1_RXONLY | SPI_CR1_BIDIMODE); // Full duplex
+    SPI6->CR1 |= SPI_CR1_SPE; // Enable SPI
 }
 
 void configureSPIBus4(void) //for flash memory storage
@@ -174,7 +171,7 @@ void configureSPIBus4(void) //for flash memory storage
 
 	//all alt function 5
 	GPIOE->AFR[1] &= ~(GPIO_AFRL_AFRL4 | GPIO_AFRL_AFRL5 | GPIO_AFRL_AFRL6);
-	GPIOE->AFR[1] |= (0x05 << GPIO_AFRL_AFRL4 | 0x05 << GPIO_AFRL_AFRL5 | 0x05 << GPIO_AFRL_AFRL6);
+	GPIOE->AFR[1] |= ((0x05 << GPIO_AFRL_AFRL4) | (0x05 << GPIO_AFRL_AFRL5) | (0x05 << GPIO_AFRL_AFRL6));
 
 	SPI4->CR1 &= (~(SPI_CR1_BR_Msk));
 	SPI4->CR1 |= (0x02 <<SPI_CR1_BR_Pos); //SPIclk/8
@@ -206,13 +203,13 @@ void configureRCC_APB1(void)
 
 void configureRCC_APB2(void)
 {
-	RCC->APB2ENR &=  ~(RCC_APB2ENR_SPI1EN | RCC_APB2ENR_SPI4EN | RCC_APB2ENR_SYSCFGEN /*important for interrupts and other sys init*/| RCC_APB2ENR_USART6EN | RCC_APB2ENR_TIM1EN);
-	RCC->APB2ENR |=  RCC_APB2ENR_SPI1EN | RCC_APB2ENR_SPI4EN | RCC_APB2ENR_SYSCFGEN | RCC_APB2ENR_USART6EN | RCC_APB2ENR_TIM1EN;
+	RCC->APB2ENR &=  ~(RCC_APB2ENR_SPI1EN | RCC_APB2ENR_SPI4EN |RCC_APB2ENR_SPI6EN| RCC_APB2ENR_SYSCFGEN /*important for interrupts and other sys init*/| RCC_APB2ENR_USART6EN | RCC_APB2ENR_TIM1EN);
+	RCC->APB2ENR |=  RCC_APB2ENR_SPI1EN | RCC_APB2ENR_SPI4EN |RCC_APB2ENR_SPI6EN| RCC_APB2ENR_SYSCFGEN | RCC_APB2ENR_USART6EN | RCC_APB2ENR_TIM1EN;
 
-	RCC->APB2RSTR |= RCC_APB2RSTR_SPI1RST | RCC_APB2RSTR_SPI4RST| RCC_APB2RSTR_SYSCFGRST | RCC_APB2RSTR_USART6RST | RCC_APB2RSTR_TIM11RST;
+	RCC->APB2RSTR |= RCC_APB2RSTR_SPI1RST | RCC_APB2RSTR_SPI4RST|RCC_APB2RSTR_SPI6RST|RCC_APB2RSTR_SYSCFGRST | RCC_APB2RSTR_USART6RST | RCC_APB2RSTR_TIM11RST;
 	__ASM("NOP");
 	__ASM("NOP");
-	RCC->APB2RSTR &= (uint16_t)~(RCC_APB2RSTR_SPI1RST | RCC_APB2RSTR_SPI4RST| RCC_APB2RSTR_SYSCFGRST | RCC_APB2RSTR_USART6RST | RCC_APB2RSTR_TIM11RST);
+	RCC->APB2RSTR &= (uint16_t)~(RCC_APB2RSTR_SPI1RST | RCC_APB2RSTR_SPI4RST|RCC_APB2RSTR_SPI6RST| RCC_APB2RSTR_SYSCFGRST | RCC_APB2RSTR_USART6RST | RCC_APB2RSTR_TIM11RST);
 	__ASM("NOP");
 	__ASM("NOP");
 }

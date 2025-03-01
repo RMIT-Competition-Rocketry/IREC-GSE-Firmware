@@ -127,7 +127,7 @@ typedef struct {
 
 /** @extends SPI */
 typedef struct SX1272 {
-  SPI *base;                                                //!< Parent SPI interface
+  SPI base;                                                //!< Parent SPI interface
   SX1272_Mode currentMode;                                  //!< Current operating mode.
   void (*enableBoost)(struct SX1272 *, bool);               //!< Power amp boost toggle method.          @see SX1272_enableBoost
   void (*standby)(struct SX1272 *);                         //!< SX1272 standby method.                  @see SX1272_standby

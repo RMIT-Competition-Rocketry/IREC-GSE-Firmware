@@ -94,7 +94,28 @@ static void SPI_receive16(SPI *spi, volatile uint16_t *data) {
 }
 
 
+uint16_t SPI6_TransmitReceive( uint16_t data) {
+    volatile uint16_t response = 0;
 
+    // Wait until SPI is not busy
+    while (SPI6->SR & SPI_SR_BSY);
+
+    // Assert CS (low)
+    GPIOG->ODR &= ~(GPIO_ODR_OD11);
+
+    // Wait until TXE flag is set and write data to DR
+    while (!(SPI6->SR & SPI_SR_TXE));
+    SPI6->DR = data;
+
+    // Wait until RXNE flag is set and read data from DR
+    while (!(SPI6->SR & SPI_SR_RXNE));
+    response = SPI6->DR;
+
+    // De-assert CS (high)
+    GPIOG->ODR |= GPIO_ODR_OD11;
+
+    return response;
+}
 
 
 
