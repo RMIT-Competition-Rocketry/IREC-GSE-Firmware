@@ -23,41 +23,37 @@ void ADC124S021_extract(ADC124S021 * adc)
 {
 switch(adc->device)
 {
+uint8_t channel = 0;
+uint16_t word = 0;
 case 0:
 	//loadcell
-	GPIOA->ODR &= ~(GPIO_ODR_OD2);
-	while((TIM7->SR & TIM_SR_UIF)!=0);
-		TIM7->SR &= ~TIM_SR_UIF; //clearing the UIF bit
-	for(int i = 0; i<NUM_MUX; i++){ //might need to change
 
-			//this is to ensure the device has sampled and converted incoming data
-			adc->data_raw[i] = SPI_transmit(&adc->base, i<<3); //changing the control register
-			//[0] = IN1 -> TRANSDUCER1
-			//[1] = IN2 -> TRANSDUCER1
-			//[2] = IN3 -> TRANSDUCER1
-			//[3] = IN4 -> TRANSDUCER1
-		}
-	GPIOA->ODR |= GPIO_ODR_OD2;
-	break;
+	//read all 4 channels from the ADC
+	for(uint8_t i = 0; i<NUM_MUX; i++)
+	{
+		word = (0x01 << 15) | (channel << 12); //correct!
+		GPIOG->ODR &= ~(GPIO_ODR_OD4);
+		uint16_t result = SPI_transmit(&adc->base, word);
+		GPIOG->ODR |= GPIO_ODR_OD4;
+		adc->data_raw[channel] = result & 0xFFF;
+		channel++;
+	}
 
 case 1://transducer
-	GPIOG->ODR &= ~(GPIO_ODR_OD4);
-	while((TIM7->SR & TIM_SR_UIF)!=1);
-		TIM7->SR &= ~TIM_SR_UIF; //clearing the UIF bit
-
-			//this is to ensure the device has sampled and converted incoming data
-		while(1){
-			adc->data_raw[0] = SPI_transmit(&adc->base,0);
-			adc->data_raw[1] = SPI_transmit(&adc->base,1<<3);
-			adc->data_raw[2] = SPI_transmit(&adc->base,2<<3);
-			adc->data_raw[3] = SPI_transmit(&adc->base,3<<3);
+		//read all 4 channels from the ADC
+		for(uint8_t i = 0; i<NUM_MUX; i++)
+		{
+			word = (0x01 << 15) | (channel << 12); //correct!
+			GPIOG->ODR &= ~(GPIO_ODR_OD4);
+			uint16_t result = SPI_transmit(&adc->base, word);
+			GPIOG->ODR |= GPIO_ODR_OD4;
+			adc->data_raw[channel] = result & 0xFFF; //masks for first 12 bits
+			channel++;
 		}
 			//[0] = IN1 -> LOADCELL1
 			//[1] = IN2 -> LOADCELL2
 			//[2] = IN3 -> LOADCELL3
 			//[3] = IN4 -> LOADCELL4
-
-	GPIOG->ODR |= GPIO_ODR_OD4;
 	break;
 	}
 }
@@ -75,12 +71,13 @@ void ADC124S021_process(ADC124S021 * adc)
 		switch(adc->device)
 		{
 			case 0: //loadcell
-				union{float mass; uint16_t post_op; int mass_int;}Converter_load;
-				for(int i = 0; i<4; i++)
+				typedef struct{float mass; uint16_t post_op; int mass_int;}Converter_load;
+				Converter_load load = {};
+				for(int i = 0; i<NUM_MUX; i++)
 				{
-					Converter_load.post_op  = adc->data_processed[i];
-					Converter_load.mass_int = Converter_load.post_op;
-					adc->Converted_Value_LoadCell[i] = (Converter_load.mass_int/(50.0f/4096.0f));
+					load.post_op  = adc->data_processed[i];
+					load.mass_int = load.post_op;
+					adc->Converted_Value_LoadCell[i] = (load.mass_int/(50.0f/4096.0f));
 					//output for each channel will be in KG
 				}
 				break;
@@ -88,7 +85,7 @@ void ADC124S021_process(ADC124S021 * adc)
 			case 1: //transducer
 				typedef struct{float mass; uint16_t post_op; int mass_int;}Converter_trans;
 				Converter_trans trans = {};
-				for(int i = 0; i<4; i++)
+				for(int i = 0; i<NUM_MUX; i++)
 								{
 									trans.post_op  = adc->data_processed[i];
 									trans.mass_int = trans.post_op;
@@ -135,8 +132,8 @@ void MCP96RL00_EMX_1_extract(MCP96RL00_EMX_1 *i2c, uint8_t address, volatile uin
 	I2C_send(&i2c->base, address, HOT_JUNCTION_TEMP_REG);
 	I2C_MultiReceive(&i2c, *data, address, 2);
 
-	i2c->data_raw[0] = &data[0]; //MSB
-	i2c->data_raw[1] = &data[1]; //LSB
+	i2c->data_raw[0] = data[0]; //MSB
+	i2c->data_raw[1] = data[1]; //LSB
 	//each sensor will have its own struct like this
 
 }
@@ -206,9 +203,9 @@ void ADT75ARMZ_extract(ADT75ARMZ *i2c, volatile uint8_t *data, uint8_t address)	
 {
 	address = address<<1; //6bit address fitting the entire byte to include the r/w command
 
-	 I2C_TempExtract(&i2c, data, address, 0x00);
-	 i2c->data_raw[0] = &data[0];
-	 i2c->data_raw[1] = &data[1];
+	 I2C_TempExtract(&i2c, *data, address, 0x00);
+	 i2c->data_raw[0] = data[0];
+	 i2c->data_raw[1] = data[1];
 }
 
 void ADT75ARMZ_process(ADT75ARMZ *i2c)

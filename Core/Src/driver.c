@@ -9,37 +9,26 @@
 #include "driver.h"
 void configureI2CBus1(void)
 { //for BUS, mode is alternate function
-	GPIOF->MODER &= (~(GPIO_MODER_MODE0_Msk | GPIO_MODER_MODE0_Msk)); //everything except for
+	GPIOF->MODER &= (~(GPIO_MODER_MODE0_Msk | GPIO_MODER_MODE1_Msk)); //everything except for
 	GPIOF->MODER |= (0x02<<GPIO_MODER_MODE0_Pos | 0x02 << GPIO_MODER_MODE1_Pos);
 	GPIOF->OTYPER &= (~(GPIO_OTYPER_OT0_Msk | GPIO_OTYPER_OT1_Msk));
 	GPIOF->OTYPER |= (0x01 << GPIO_OTYPER_OT0_Pos | 0x01<<GPIO_OTYPER_OT1_Pos); //open drain
 	GPIOF->OSPEEDR &= (~(GPIO_OSPEEDR_OSPEED0_Msk | GPIO_OSPEEDR_OSPEED1_Msk));
-	GPIOF->OSPEEDR |= 0x01 << GPIO_OSPEEDR_OSPEED0_Pos | 0x01 << GPIO_OSPEEDR_OSPEED1_Pos; //doesn't need to be quick
+	GPIOF->OSPEEDR |= 0x01 << GPIO_OSPEEDR_OSPEED0_Pos | 0x01 << GPIO_OSPEEDR_OSPEED1_Pos;
 
 	GPIOF->PUPDR &= (~(GPIO_PUPDR_PUPD0_Msk | GPIO_PUPDR_PUPD1_Msk));
 	GPIOF->PUPDR |= 0x01<<GPIO_PUPDR_PUPD0_Pos | 0x01<<GPIO_PUPDR_PUPD1_Pos; //enabling internal pull ups on I2C lines
 
-	//might change timer channel itself, although with available timers this should be fine!
-	TIM2->ARR &= ~(TIM_ARR_ARR_Msk);
-	TIM2->PSC &= ~(TIM_PSC_PSC_Msk); //resetting both prescaler and counter registers
-	TIM2->ARR |= (39800-1); //counter
-	TIM2->PSC |= (114 - 1); //prescaler
-
-	TIM2->CR1 |= TIM_CR1_CEN; //turns on the timer -> fix .ioc to get rid of HAL init
-
 	//turn on alternate function of I2C
 	GPIOF->AFR[0] |= 0x03; //alt function 3
-	GPIOF->AFR[0] |= 0x03 <<(4*1); //PF1
+	GPIOF->AFR[0] |= 0x03 << (4*1); //PF1
 
-	I2C1->OAR1 &= (~(I2C_OAR1_ADDMODE_Msk) | 0x3FF);
+	I2C1->OAR1 &= ~(I2C_OAR1_ADDMODE_Msk | 0x3FF);
 	I2C1->OAR1 |= (0x30 << 1); //I2C1 address (may need to change)
-
 	I2C1->CR2 &= (~(I2C_CR2_FREQ_Msk));
 	I2C1->CR2 |= 0x05; //for 8mhz
-
 	I2C1->CCR &= (~(0xFFF)); // clears bits 11:0
 	I2C1->CCR |= 0x28;
-
 	I2C1->CR1 |= I2C_CR1_PE; //starts the protocol
 
 }
@@ -52,7 +41,10 @@ void configureSPIBus1(void) //for ADC transducers
 	GPIOA->MODER |= (0x02 <<GPIO_MODER_MODE5_Pos | 0x02 << GPIO_MODER_MODE6_Pos | 0x02 << GPIO_MODER_MODE7_Pos);
 	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD5_Msk | GPIO_PUPDR_PUPD6_Msk | GPIO_PUPDR_PUPD7_Msk); //if needing to change internal pull up/downs
 	GPIOA->PUPDR |= (0x01 << GPIO_PUPDR_PUPD5_Pos | 0x01 << GPIO_PUPDR_PUPD6_Pos | 0x01 << GPIO_PUPDR_PUPD7_Pos); //internal pull ups on SCK, MOSI and MISO
-
+	GPIOA->OTYPER &= (uint16_t)~(GPIO_OTYPER_OT5_Msk | GPIO_OTYPER_OT6_Msk | GPIO_OTYPER_OT7_Msk ); //push pull de
+	GPIOA->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED5_Msk | GPIO_OSPEEDR_OSPEED6_Msk | GPIO_OSPEEDR_OSPEED7_Msk);
+	GPIOA->OSPEEDR |= (0x02<<GPIO_OSPEEDR_OSPEED5_Pos | 0x02<<GPIO_OSPEEDR_OSPEED6_Pos | 0x02<<GPIO_OSPEEDR_OSPEED7_Pos); //fast mode
+	GPIOA->AFR[0] |= (0x05 << 4*5) | (0x05 << 4*6) | (0x05 << 4*7); //alternate function 5,5,5
 
 	//Chip Select for Transducer: PG4
 	GPIOG->MODER |= 0x01 << GPIO_MODER_MODE4_Pos;
@@ -79,23 +71,21 @@ void configureSPIBus1(void) //for ADC transducers
 	while((TIM7->SR & TIM_SR_UIF) == 0);
 	TIM7->SR &= ~(TIM_SR_UIF); //clear UIF
 
-	GPIOA->OTYPER &= (uint16_t)~(GPIO_OTYPER_OT5_Msk | GPIO_OTYPER_OT6_Msk | GPIO_OTYPER_OT7_Msk ); //push pull de
-	GPIOA->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED5_Msk | GPIO_OSPEEDR_OSPEED6_Msk | GPIO_OSPEEDR_OSPEED7_Msk);
-	GPIOA->OSPEEDR |= (0x02<<GPIO_OSPEEDR_OSPEED5_Pos | 0x02<<GPIO_OSPEEDR_OSPEED6_Pos | 0x02<<GPIO_OSPEEDR_OSPEED7_Pos); //fast mode
-
-	GPIOA->AFR[0] |= (0x05 << 4*5) | (0x05 << 4*6) | (0x05 << 4*7); //alternate function 5,6,6
-
 	SPI1->CR1 &= (~(SPI_CR1_BR_Msk));
 	SPI1->CR1 |= (0x04 <<SPI_CR1_BR_Pos); //SPIclk/32
+
 	SPI1->CR1 &= (~(SPI_CR1_CPHA)); //
+	//SPI1->CR1 |= SPI_CR1_CPHA; // CPHA mode 1 //comment for mode 0
 	SPI1->CR1 &= ~(SPI_CR1_CPOL);
+	//SPI1->CR1 |= SPI_CR1_CPOL; //CPOL mode 1 //comment for mode 0
+	//Clock is IDLE high, and polarity is on the falling edge!
 
 	SPI1->CR1 |= SPI_CR1_MSTR; //sets SPI to master mode
 	SPI1->CR1 |= SPI_CR1_SSM | SPI_CR1_SSI; //set both bits;
 
 	SPI1->CR1 &= ~(SPI_CR1_LSBFIRST); //MSB
 	SPI1->CR1 |= SPI_CR1_DFF; //16 bit mode has been selected!
-	SPI1->CR1 &= (~(SPI_CR1_RXONLY | SPI_CR1_BIDIMODE));
+	SPI1->CR1 &= ~(SPI_CR1_RXONLY | SPI_CR1_BIDIMODE);
 	SPI1->CR1 |= (0x01 << SPI_CR1_SPE_Pos); //enables the protocol
 }
 

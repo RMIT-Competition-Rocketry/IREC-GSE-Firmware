@@ -93,7 +93,7 @@ static void SPI_receive16(SPI *spi, volatile uint16_t *data) {
   *data = spi->interface->DR;
 }
 
-
+/*
 uint16_t SPI6_TransmitReceive( uint16_t data) {
     volatile uint16_t response = 0;
 
@@ -115,7 +115,7 @@ uint16_t SPI6_TransmitReceive( uint16_t data) {
     GPIOG->ODR |= GPIO_ODR_OD11;
 
     return response;
-}
+}*/
 
 
 
