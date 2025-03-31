@@ -27,8 +27,8 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f4xx_hal.h"
 
+#include "stm32f4xx_hal.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "driver.h"
@@ -88,8 +88,13 @@ void Error_Handler(void);
 //Ignition Arming GPIO
 
 
-
-
+//SMD LEDs DEFINITIONS
+#define LED_1_PWR GPIO_ODR_OD12
+#define LED_2_PWR GPIO_ODR_OD11
+#define LED_3_PWR GPIO_ODR_OD10
+#define LED_4_PWR GPIO_ODR_OD9
+#define LED_5_PWR GPIO_ODR_OD8
+#define LED_6_PWR GPIO_ODR_OD9
 
 
 //LED GPIO DEFINITIONS
@@ -117,27 +122,29 @@ void Error_Handler(void);
 #define IGNITION2_OP GPIO_ODR_OD2
 #define IGNITION2_ARM GPIO_ODR_OD3
 
-#define IGNITION1_OP_OFF 0x01 <<14
-#define IGNITION1_ARM_OFF 0x01 <<15
-#define IGNITION2_OP_OFF 0x01 <<2
-#define IGNITION2_ARM_OFF 0x01<<3
+#define IGNITION1_OP_OFF (0x01<<14)
+#define IGNITION1_ARM_OFF (0x01<<15)
+#define IGNITION2_OP_OFF (0x01<<2)
+#define IGNITION2_ARM_OFF (0x01<<3)
 
 
 //relays
 
-#define CH1_Operate_OFF GPIO_ODR_OD9
-#define CH1_Arm_OFF GPIO_ODR_OD12
-#define CH1_Operate 0 << 9 //PURGE relay is NO -> need to
-#define CH1_Arm 0 << 12
-#define CH1_Cont GPIO_ODR_OD15
+#define CH1_Operate GPIO_ODR_OD13
+#define CH1_Arm GPIO_ODR_OD14
+#define CH1_Cont GPIO_ODR_OD11
 
-#define CH2_Operate GPIO_ODR_OD13
-#define CH2_Arm GPIO_ODR_OD14
-#define CH2_Cont GPIO_ODR_OD11
+#define CH2_Operate GPIO_ODR_OD10
+#define CH2_Arm GPIO_ODR_OD12
+#define CH2_Cont GPIO_ODR_OD15
 
-#define CH3_Operate GPIO_ODR_OD9
-#define CH3_Arm GPIO_ODR_OD10
-#define CH3_Cont GPIO_ODR_OD13
+#define CH3_Operate GPIO_ODR_OD11
+#define CH3_Arm GPIO_ODR_OD12
+#define CH3_Cont GPIO_ODR_OD8
+
+#define CH4_Operate GPIO_ODR_OD9
+#define CH4_Arm GPIO_ODR_OD10
+#define CH4_Cont GPIO_ODR_OD13
 
 //state for remote access
 #define MANUAL_PURGE 0x01 << 7
@@ -157,6 +164,7 @@ void RX_Receive(void);
 typedef enum{
 	ERROR_NONE = 0,
 	ERROR_INVALID_PACKET_ID,
+	ERROR_INVALID_PACKET_DATA,
 	ERROR_RX_FAILED,
 	ERROR_TX_FAILED,
 	ERROR_SYSTEM_STATE_FAILED
