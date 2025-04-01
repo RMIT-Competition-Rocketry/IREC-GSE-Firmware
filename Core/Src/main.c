@@ -57,11 +57,11 @@ volatile uint8_t test_rx_interrupt =0;
 uint8_t lora_error = 0; //mainly for lora comms error state
 bool triggerRX = false;
 uint8_t pointerdata[LORA_MSG_LENGTH];
+uint8_t state_inverse = 0x00; //random value to start with
 
 
 
-
-
+uint8_t lora_spam_transmit_state = 0;
 
 int max_temp_failure_mode = 38.0;
 int max_temp_error_mode = 35.0;
@@ -217,7 +217,7 @@ int main(void)
 	configureSPIBus1();
 	configureSPIBus6(); //SPI6
  // configureSPIBus4();
-	configureI2CBus1();
+	//configureI2CBus1();
 //sensor configuration**********************************************
   //void ADT75ARMZ_init(ADT75ARMZ * i2c, I2C_TypeDef *interface, GPIO_TypeDef *port, Type TEMPERATURE_SENSOR, uint8_t address)
 
@@ -347,8 +347,8 @@ int main(void)
 	//MCP96RL00_EMX_1_init(&thermocouple_3,I2C1, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, 0x62);
 	//MCP96RL00_EMX_1_init(&thermocouple_4,I2C1, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, 0x63);
 
-	ADC124S021_init(&LoadCells,Load_Cell, LOAD_CELL_PORT, LOAD_CELL_CS);
-	ADC124S021_init(&Transducers,Transducer, TRANSDUCER_PORT, TRANSDUCER_CS);
+//	ADC124S021_init(&LoadCells,Load_Cell, LOAD_CELL_PORT, LOAD_CELL_CS);
+//	ADC124S021_init(&Transducers,Transducer, TRANSDUCER_PORT, TRANSDUCER_CS);
 
 	//configure_TIM1(); //start LoRa timer -> as late as possible!
 
@@ -395,7 +395,6 @@ uint8_t LoRa_Frequency_MiB = 0;
 uint8_t LoRa_Frequency_LSB = 0;
 
 uint8_t RXDone_CHK = 0;
-
 uint8_t DIOmapping = 0;
 
 
@@ -414,8 +413,8 @@ uint8_t DIOmapping = 0;
 	EXTI->IMR |= EXTI_IMR_IM7;
 
 	//here is channel for loRa PD7
-	//NVIC_EnableIRQ(EXTI9_5_IRQn);
-	//NVIC_SetPriority(EXTI9_5_IRQn,9);
+	NVIC_EnableIRQ(EXTI9_5_IRQn);
+	NVIC_SetPriority(EXTI9_5_IRQn,9);
 	//re-enable to turn on LoRa RX interrupt!
 
 	SX1272_init(&lora,"GSE_LORA", LORA_PORT, LORA_CS, SX1272_BW500, SX1272_SF9, SX1272_CR5);
@@ -442,8 +441,12 @@ while (1) {
 	case 0:
 
 		__enable_irq();
-
-
+		/*
+while(1)
+{
+	transmit_packets_spam();
+}
+*/
 		//Ignition1_ARM.port->ODR |= IGNITION1_ARM;
 		//Ignition1_OP.port->ODR |= IGNITION1_OP;
 		//Ignition1_OP.port->ODR &= ~IGNITION1_OP;
@@ -543,8 +546,8 @@ while (1) {
 
 		//Extract surface mount temp sensor temp
 		//no error checking currently implemented with internal temperature
-		ADT75ARMZ_extract(&temp_sensor, data_thermo, 0x48);
-		ADT75ARMZ_process(&temp_sensor);
+	//	ADT75ARMZ_extract(&temp_sensor, data_thermo, 0x48);
+	//	ADT75ARMZ_process(&temp_sensor);
 
 		//Check if SX1272 has recieved a packet, if not move on
 		if(triggerRX){RX_Receive();}else{__asm("NOP");}
@@ -914,7 +917,6 @@ while (1) {
 		led_n2o.port->ODR|=N2O_LED;
 		CH3_ARM.port->ODR |= CH3_Arm;
 		CH3_OP.port->ODR |= CH3_Operate;
-
 		switch_case_state = 0;
 		break;
 
@@ -985,6 +987,7 @@ while (1) {
 		led_o2.port->ODR|=O2_LED;
 		CH2_ARM.port->ODR |= CH2_Arm;
 		CH2_OP.port->ODR |= CH2_Operate;
+
 
 		switch_case_state = 0;
 		break;
@@ -1139,25 +1142,28 @@ while (1) {
 		CH1_ARM.port->ODR |= (CH1_Arm);
 		CH1_OP.port->ODR |= (CH1_Operate);
 
+
 		//Spark Generation Sequence, 5 sparks total
 		Ignition1_ARM.port->ODR |= IGNITION1_ARM;
 		Ignition1_OP.port->ODR |= IGNITION1_OP;
+		Ignition2_ARM.port->ODR |= IGNITION2_ARM;
+		Ignition2_OP.port->ODR |= IGNITION2_OP;
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
 		Ignition1_OP.port->ODR &= ~(IGNITION1_OP);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition1_OP.port->ODR &= (IGNITION1_OP);
+		Ignition1_OP.port->ODR |= (IGNITION1_OP);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
 		Ignition1_OP.port->ODR &= ~(IGNITION1_OP);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition1_OP.port->ODR &= (IGNITION1_OP);
+		Ignition1_OP.port->ODR |= (IGNITION1_OP);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
 		Ignition1_OP.port->ODR &= ~(IGNITION1_OP);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition1_OP.port->ODR &= (IGNITION1_OP);
+		Ignition1_OP.port->ODR |= (IGNITION1_OP);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
 		Ignition1_OP.port->ODR &= ~(IGNITION1_OP);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition1_OP.port->ODR &= (IGNITION1_OP);
+		Ignition1_OP.port->ODR |= (IGNITION1_OP);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
 		Ignition1_OP.port->ODR &= ~(IGNITION1_OP);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
@@ -1332,6 +1338,8 @@ void EXTI9_5_IRQHandler(void)
  	// SX1272_clearIRQ(&lora, SX1272_LORA_IRQ_RXDONE);
 	EXTI->PR &= ~0x1F0; //resets the flag
 	triggerRX= true;
+	__NVIC_DisableIRQ(EXTI9_5_IRQn); //uncomment after testing!!
+
 }
 
 void RX_Receive(void)
@@ -1341,14 +1349,13 @@ void RX_Receive(void)
 	__NVIC_DisableIRQ(TIM1_UP_TIM10_IRQn); //Disable IQR for LoRa Hardware Timer
 
 	bool RX_result = false;
-
 	RX_result = SX1272_readReceive(&lora, pointerdata, LORA_MSG_LENGTH);
 	triggerRX = false;
 	GSE_Command.id= pointerdata[0];
 	GSE_Command.data[0]= pointerdata[1];
 	GSE_Command.data[1]= pointerdata[2];
 
-
+	state_inverse = (GSE_Command.data[0] & GSE_Command.data[1]);
 	if(GSE_Command.id != 0x02)
 	{
 		lora_error = ERROR_INVALID_PACKET_ID;
@@ -1358,7 +1365,7 @@ void RX_Receive(void)
 
 	}
 	// Double Checks Valid Data
-	if ( (GSE_Command.data[0] & ~(GSE_Command.data[1])) == 0 )
+	if (state_inverse == 0)
 	{
 		if((GSE_Command.data[0] & 0x01) != 1) //ID is correct (as the ID does = 0x02, as per previous if statement)
 			{
@@ -1374,7 +1381,9 @@ void RX_Receive(void)
 				state = GSE_Command.data[0];
 				hardware_timer_count = 0;
 				uint8_t transmit_state = 0;
+				__NVIC_EnableIRQ(EXTI9_5_IRQn);
 				// Transmit response based on TX_Packet_Flag
+				/* get rid of ->  // to test RX and state change validation with RX command
 				switch(TX_Packet_Flag)
 				{
 				case 0:
@@ -1425,7 +1434,9 @@ void RX_Receive(void)
 				default:
 					lora_error = ERROR_SYSTEM_STATE_FAILED;
 				}
+				*/ //P2 (end)
 			}
+
 	}
 	else
 	{
@@ -1435,6 +1446,42 @@ void RX_Receive(void)
 		__NVIC_EnableIRQ(EXTI9_5_IRQn);
 	}
 
+
+}
+
+void transmit_packets_spam()
+{
+	uint8_t lora_spam_transmit = 0;
+	switch(lora_spam_transmit_state)
+	{
+	case 0:
+		LoRa_Packet packet0 = Dummy_Transmit();
+		SX1272_transmit(&lora, packet0.data);
+		do
+		{
+			lora_spam_transmit = SX1272_readRegister(&lora, SX1272_REG_IRQ_FLAGS);
+		}while((lora_spam_transmit & 0x08) == 0x00); //will continue if transmit state and 0x08 are the same or 0
+	  	SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
+	  	TX_Packet_Flag = 0;
+	  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS);
+		__NVIC_EnableIRQ(EXTI9_5_IRQn);
+		//__NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
+	  	break;
+	case 1:
+
+		LoRa_Packet packet1 = Dummy_Transmit_2();
+		SX1272_transmit(&lora, packet1.data);
+		do
+		{
+			lora_spam_transmit = SX1272_readRegister(&lora, SX1272_REG_IRQ_FLAGS);
+		}while((lora_spam_transmit & 0x08) == 0x00); //will continue if transmit state and 0x08 are the same or 0
+	  	SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
+	  	TX_Packet_Flag = 0;
+	  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS);
+		__NVIC_EnableIRQ(EXTI9_5_IRQn);
+	//	__NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
+	  	break;
+	}
 
 }
 
@@ -1453,6 +1500,24 @@ void Error_Handler(void)
     {__asm("NOP");}
   /* USER CODE END Error_Handler_Debug */
 }
+
+/*
+void transmit_packets_spam()
+{
+switch(lora_spam_transmit_state)
+{
+case 0:
+	LoRa_Packet packet0 =
+
+
+
+case 1:
+
+
+
+}
+
+*/
 
 #ifdef  USE_FULL_ASSERT
 /**

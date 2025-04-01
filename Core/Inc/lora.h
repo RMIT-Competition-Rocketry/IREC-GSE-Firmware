@@ -181,6 +181,8 @@ LoRa_Packet LoRa_GSEData_2	(
 		);
 
 LoRa_Packet LoRa_Command (uint8_t[LORA_MSG_LENGTH]);
+LoRa_Packet Dummy_Transmit();
+LoRa_Packet Dummy_Transmit_2();
 
 //for the packet that will receive information, to a memcpy operation to move FIFO data to the custom struct! for RX data
 void _LoRa_setMode(SX1272_t *, SX1272_Mode);

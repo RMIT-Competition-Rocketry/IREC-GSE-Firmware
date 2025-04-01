@@ -316,6 +316,35 @@ LoRa_Packet LoRa_GSEData_2	(
 
 }
 
+LoRa_Packet Dummy_Transmit()
+{
+	LoRa_Packet msg;
+uint8_t id = 0x09;
+uint8_t SIZE = 16;
+uint8_t data[SIZE];
+msg.id = id;
+for(uint8_t i = 0; i <SIZE; i++)
+{
+	data[i] = i*2;
+	memcpy(msg.data[SIZE], data, sizeof(uint8_t));
+}
+}
+
+LoRa_Packet Dummy_Transmit_2()
+{
+	LoRa_Packet msg;
+uint8_t id = 0x10;
+uint8_t SIZE = 16;
+uint8_t data[SIZE];
+msg.id = id;
+for(uint8_t i = 0; i <SIZE; i++)
+	{
+		data[i] = (i*2) + 32;
+		memcpy(msg.data[SIZE], data, sizeof(uint8_t));
+	}
+}
+
+
 //rx not tx
 LoRa_Packet LoRa_Command (uint8_t payload[LORA_MSG_LENGTH])
 {
@@ -541,3 +570,4 @@ uint8_t SX1272_readRegister(SX1272_t *lora, uint8_t address) {
 
   return response;
 }
+

@@ -169,6 +169,8 @@ typedef enum{
 	ERROR_TX_FAILED,
 	ERROR_SYSTEM_STATE_FAILED
 }ErrorCode;
+
+void transmit_packets_spam(void);
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
