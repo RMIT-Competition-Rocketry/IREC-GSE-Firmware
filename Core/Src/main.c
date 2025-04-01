@@ -212,6 +212,7 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
+	delay_software_ms(100); //important
 	MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
 	configureSPIBus1();
