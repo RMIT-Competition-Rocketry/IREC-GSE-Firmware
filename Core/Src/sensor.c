@@ -23,32 +23,34 @@ void ADC124S021_extract(ADC124S021 * adc)
 {
 switch(adc->device)
 {
-uint8_t channel = 0;
 uint16_t word = 0;
 case 0:
 	//loadcell
 
 	//read all 4 channels from the ADC
-	for(uint8_t i = 0; i<NUM_MUX; i++)
+	for(uint8_t channel = 0; channel <NUM_MUX; channel ++)
 	{
-		word = (0x01 << 15) | (channel << 12); //correct!
+		word = (channel << 14) | (0x00 << 12);; //correct! (8 bit type casting!)
 		GPIOG->ODR &= ~(GPIO_ODR_OD4);
+		delay_software_us(1);
 		uint16_t result = SPI_transmit(&adc->base, word);
 		GPIOG->ODR |= GPIO_ODR_OD4;
+		delay_software_us(1);
 		adc->data_raw[channel] = result & 0xFFF;
-		channel++;
 	}
 
 case 1://transducer
 		//read all 4 channels from the ADC
-		for(uint8_t i = 0; i<NUM_MUX; i++)
+	for(uint8_t channel = 0; channel <NUM_MUX; channel ++)
 		{
-			word = (0x01 << 15) | (channel << 12); //correct!
+			word = (channel << 14) | (0x00 << 12); //correct!
+			//control register -> MSB doesnt matter, channel does!
 			GPIOG->ODR &= ~(GPIO_ODR_OD4);
+			delay_software_us(1);
 			uint16_t result = SPI_transmit(&adc->base, word);
 			GPIOG->ODR |= GPIO_ODR_OD4;
-			adc->data_raw[channel] = result & 0xFFF; //masks for first 12 bits
-			channel++;
+			delay_software_us(1);
+			adc->data_raw[channel] = result & 0x0FFF; //masks for first 12 bits
 		}
 			//[0] = IN1 -> LOADCELL1
 			//[1] = IN2 -> LOADCELL2
@@ -98,16 +100,16 @@ void ADC124S021_process(ADC124S021 * adc)
 	}
 }
 
-void MCP96RL00_EMX_1_init(MCP96RL00_EMX_1 * sensor, I2C_TypeDef *interface,GPIO_TypeDef *port, Type THERMOCOUPLE, uint8_t sample, uint8_t resolution, uint8_t address)
+void MCP96RL00_EMX_1_init(MCP96RL00_EMX_1 *sensor, I2C_TypeDef *interface,GPIO_TypeDef *port, Type THERMOCOUPLE, uint8_t sample, uint8_t resolution, uint8_t address)
 {
-	I2C_init(&sensor->base, interface, port, THERMOCOUPLE, address);//change address later
+	I2C_init(&sensor->base, interface, port, THERMOCOUPLE, address, 0);//change address later
 	sensor->address = address;
 	sensor->device = THERMOCOUPLE;
 	sensor->resolution = resolution;
 	sensor->sample = sample;
 	sensor->extract = MCP96RL00_EMX_1_extract;
 	sensor->process = MCP96RL00_EMX_1_process;
-	sensor->write = MCP96RL00_EMX_1_write;
+//	sensor->write = MCP96RL00_EMX_1_write;
 
 	//parse data into temporary variable -> then do this with all thermocouples
 	//read = bit0 = 1
@@ -117,85 +119,85 @@ void MCP96RL00_EMX_1_init(MCP96RL00_EMX_1 * sensor, I2C_TypeDef *interface,GPIO_
 	//get the device ID first
 	uint8_t data_thermo_conf = 0x00 << 4; 	//configure the thermocouple type (CHANGE THIS) does nothing
 	uint8_t data_status_conf = COLD_JUNCTION_RES_LOW << 7 | RESOLUTION_HIGH << 5 | THERMO_SAMPLE_8 << 2 | 0x00; //sample is only in burst mode -> not implemented
-//temporarily T type thermocouple!
-	MCP96RL00_EMX_1_write(&sensor, address, data_thermo_conf, THERMOCOUPLE_SENSOR_CONFIG_REG);
-	MCP96RL00_EMX_1_write(&sensor, address, data_status_conf, DEVICE_CONFIGURATION_REG);
-
-
+	//temporarily T type thermocouple!
+	MCP96RL00_EMX_1_write(&sensor->base, address, data_thermo_conf, THERMOCOUPLE_SENSOR_CONFIG_REG);
+	MCP96RL00_EMX_1_write(&sensor->base, address, data_status_conf, DEVICE_CONFIGURATION_REG);
 	//device config register
+//*************I2C Addresses for each device*****************************
+	/*Thermocouple 1: 0b1100000
+	 *Thermocouple 2: 0b1100001
+	 *Thermocouple 3: 0b1100010
+	 *Thermocouple 4: 0b1100011
+	 */
+
 
 }
 
-void MCP96RL00_EMX_1_extract(MCP96RL00_EMX_1 *i2c, uint8_t address, volatile uint8_t *data)
+
+void MCP96RL00_EMX_1_extract(MCP96RL00_EMX_1 *mcp, uint8_t address, volatile uint8_t *data)
 {
 	//command is fixed -> no need to change this
-	I2C_send(&i2c->base, address, HOT_JUNCTION_TEMP_REG);
-	I2C_MultiReceive(&i2c, *data, address, 2);
+	I2C_send(&mcp->base, address, HOT_JUNCTION_TEMP_REG);
+	I2C_MultiReceive(&mcp->base, *data, address, 2);
 
-	i2c->data_raw[0] = data[0]; //MSB
-	i2c->data_raw[1] = data[1]; //LSB
+	mcp->data_raw[0] = data[0]; //MSB
+	mcp->data_raw[1] = data[1]; //LSB
 	//each sensor will have its own struct like this
 
 }
-void MCP96RL00_EMX_1_process(MCP96RL00_EMX_1 *i2c)
+void MCP96RL00_EMX_1_process(MCP96RL00_EMX_1 *mcp)
 {
 	for(uint8_t i = 0; i<2; i++){
 	//a = 0.15
-		i2c->data_processed[i] = 0.15*(i2c->data_processed[i]) + (1-0.15)*i2c->data_raw[i];
+		mcp->data_processed[i] = 0.15*(mcp->data_processed[i]) + (1-0.15)*mcp->data_raw[i];
 
 	//y[n] = a*y[n-1] + (1-a)x[n];
 	}
 	//do temperature conversion
 	//K type thermocouple -> temperature range is-> -200C to 1372C within a 0-5V range
-	i2c->converted_bin[0] = (i2c->data_processed[0] << 8) | (i2c->data_processed[1]);
+	mcp->converted_bin[0] = (mcp->data_processed[0] << 8) | (mcp->data_processed[1]);
 
 	union{float temperature; uint16_t raw_bin[2]; int temperature_int;}Converter;
 		for(uint8_t i = 0; i<2; i++)
 		{
-			Converter.raw_bin[i] = i2c->converted_bin[i];
+			Converter.raw_bin[i] = mcp->converted_bin[i];
 		}
 		if(Converter.temperature_int & 0x01<<31)//checking for sign
 		{
 			Converter.temperature = (((Converter.temperature_int & 0xFF000000)*16) + ((Converter.temperature_int & 0x00FF0000)/16) - 4096);
-			i2c->temperature = Converter.temperature;
+			mcp->temperature = Converter.temperature;
 		}
 		else{ //if sign is 0 -> temperature is positive below!
 			Converter.temperature = ((Converter.temperature_int & 0xFF000000)*16) + ((Converter.temperature_int & 0x00FF0000)/16);
-			i2c->temperature = Converter.temperature;
+			mcp->temperature = Converter.temperature;
 		}
 	//too access temperature information post processing-> use struct element->temperature
 }
-void MCP96RL00_EMX_1_write(MCP96RL00_EMX_1 *i2c, uint8_t address, uint8_t data, uint8_t command)
+void MCP96RL00_EMX_1_write(I2C *mcp, uint8_t address, uint8_t data, uint8_t command)
 {
-	uint8_t payload_first[2];
-	uint8_t payload[3]; //address, MSB byte, LSB byte
-
-
-	//payload[0] = address & 0xF0; //clearing bit0 to allow for write mode -> change this!
-	//address is in automatically
-	payload_first[0] = command; //pointer register
-	payload_first[1] = data;
-	I2C_send(&i2c->base, payload_first[0], payload_first[1]); //Struct, Address byte, Pointer address,
-	I2C_sendBurst(&i2c->base, payload, 3-1, address);
+	uint8_t *payload_first[2] ={0,0};
+	uint8_t *payload[3] = {0,0,0}; //address, MSB byte, LSB byte
+	payload_first[0] = &command; //pointer register
+	payload_first[1] = &data;
+	I2C_send(&mcp, &payload_first[0], payload_first[1]); //Struct, Address byte, Pointer address,
+	I2C_sendBurst(&mcp, &payload, 3-1, address);
 }
 
 
 void ADT75ARMZ_init(ADT75ARMZ *i2c, I2C_TypeDef *interface, GPIO_TypeDef *port, Type TEMPERATURE_SENSOR, uint8_t address)
 {
-	I2C_init(&i2c->base, interface, port, TEMPERATURE_SENSOR, address);
+	I2C_init(&i2c->base, interface, port, TEMPERATURE_SENSOR, address, 0); //error is 0 as to presume no errors initially
 	i2c->address = address;
 	i2c->device = TEMPERATURE_SENSOR;
 	i2c->extract = ADT75ARMZ_extract;
 	i2c->process = ADT75ARMZ_process;
 	i2c->write = ADT75ARMZ_write;
-	//reading (R) = 0 at LSb, writing (W) = 1 at LSb
+	//reading (R) = 0 at LSb, writing (W) = 1 at LSB
 	address = (address<<1)|0x01; //bit shift left and bitwise or the result post bitshift
-
 	uint8_t data[2];
 	data[0] = 0x01; //configuration register pointer
-	data[1] = INTERRUPT_MODE_BIT | OS_ALERT_HIGH | TEMPERATURE_QUEUE_1 | NORMAL_MODE | DIS_SMBUS_ALERT;
-
-	I2C_sendBurst(&i2c, data, sizeof(data), address);
+	data[1] = (INTERRUPT_MODE_BIT | OS_ALERT_HIGH | TEMPERATURE_QUEUE_1 | NORMAL_MODE | DIS_SMBUS_ALERT);
+	I2C_sendBurst(&i2c, data, 2, address); //2 bytes
 
 }
 //@param data is a temporary variable -> doesn't have to be declared globally!
@@ -236,6 +238,31 @@ void ADT75ARMZ_write(ADT75ARMZ *i2c, uint8_t data, uint8_t address, uint8_t poin
 		payload[1] = data;
 
 	I2C_sendBurst(&i2c, data, sizeof(data), address);
+}
+
+uint16_t ADC124S021_ReadChannel(uint8_t channel) {
+    uint16_t adcValue = 0;
+    uint16_t command = (channel << 14); // Channel select (bits D15-D14)
+
+	GPIOG->ODR &= ~GPIO_ODR_OD4; //bring dow CS of PG
+
+    // Transmit command (16-bit)
+    while (!(SPI1->SR & SPI_SR_TXE)); // Wait for TX buffer empty
+    SPI1->DR = command;
+
+    // Wait for RX data
+    while (!(SPI1->SR & SPI_SR_RXNE));
+    adcValue = SPI1->DR; // Dummy read (first 16 bits are zeros)
+
+    // Read actual ADC value
+    while (!(SPI1->SR & SPI_SR_TXE));
+    SPI1->DR = 0x0000; // Send dummy data to clock out ADC result
+
+    while (!(SPI1->SR & SPI_SR_RXNE));
+    adcValue = SPI1->DR & 0x0FFF; // Mask 12-bit result
+
+	GPIOG->ODR |= GPIO_ODR_OD4; //raise up CS of PG
+    return adcValue;
 }
 
 void delay_software_us( uint32_t usec )

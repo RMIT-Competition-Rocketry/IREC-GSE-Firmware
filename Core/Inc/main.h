@@ -27,8 +27,8 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-
 #include "stm32f4xx_hal.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "driver.h"
@@ -127,7 +127,6 @@ void Error_Handler(void);
 #define IGNITION2_OP_OFF (0x01<<2)
 #define IGNITION2_ARM_OFF (0x01<<3)
 
-
 //relays
 
 #define CH1_Operate GPIO_ODR_OD13
@@ -160,6 +159,8 @@ void RX_Receive(void);
 #define LORA_PORT GPIOG
 #define LORA_CS GPIO_ODR_OD11
 #define LORA_DIO0 GPIO_ODR_OD7 //DIO0 GPIO
+
+
 
 typedef enum{
 	ERROR_NONE = 0,

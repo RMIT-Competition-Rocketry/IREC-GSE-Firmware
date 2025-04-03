@@ -51,7 +51,6 @@ uint16_t SPI_transmit(SPI *spi, uint16_t data) {
   spi->receive(spi, &response);
   while (spi->interface->SR & SPI_SR_BSY);
   return response;
-
 }
 
 /* =============================================================================== */

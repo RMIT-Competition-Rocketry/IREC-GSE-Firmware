@@ -61,8 +61,12 @@
 
 
 
+#define THERMOCOUPLE_1_ADDR 0b1100000
+#define THERMOCOUPLE_2_ADDR 0b1100001
+#define THERMOCOUPLE_3_ADDR 0b1100010
+#define THERMOCOUPLE_4_ADDR 0b1100011
 
-//ADDR2 is not needed
+
 
 typedef enum{
 	Load_Cell, //0
@@ -98,6 +102,8 @@ float Converted_Value_Transducer[NUM_MUX];
 void(*process)(struct ADC124S021 *);
 }ADC124S021;
 
+uint16_t ADC124S021_ReadChannel(uint8_t channel);
+
 void ADC124S021_init(ADC124S021 *, SensorType, GPIO_TypeDef *, unsigned long);
 void ADC124S021_extract(ADC124S021 *);
 void ADC124S021_process(ADC124S021 *); //LPF and convert into deg
@@ -116,13 +122,14 @@ typedef struct{
 	float temperature;
 	void(*extract)(struct MCP96RL00_EMX_1 *, uint8_t, volatile uint8_t *);
 	void(*process)(struct MCP96RL00_EMX_1 *); //all data should be stored in the struct
-	void(*write)(struct MCP96RL00_EMX_1 *, uint8_t, uint8_t, uint8_t);
+	//void(*write)(struct MCP96RL00_EMX_1 *, uint8_t, uint8_t, uint8_t);
 }MCP96RL00_EMX_1;
 
 void MCP96RL00_EMX_1_extract(MCP96RL00_EMX_1 *, uint8_t, volatile uint8_t *);
 void MCP96RL00_EMX_1_process(MCP96RL00_EMX_1 *); //all data should be stored in the struct
-void MCP96RL00_EMX_1_write(MCP96RL00_EMX_1 *, uint8_t, uint8_t, uint8_t);
+void MCP96RL00_EMX_1_write(I2C *, uint8_t, uint8_t, uint8_t);
 void MCP96RL00_EMX_1_init(MCP96RL00_EMX_1 *,I2C_TypeDef *,GPIO_TypeDef *,Type, uint8_t, uint8_t, uint8_t);
+
 
 
 #define COMPARATOR_MODE_BIT 0x00 <<1

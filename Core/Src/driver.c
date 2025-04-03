@@ -7,10 +7,10 @@
 
 #include "stm32f4xx_hal.h"
 #include "driver.h"
-void configureI2CBus1(void)
+	void configureI2CBus1(void)
 { //for BUS, mode is alternate function
 	GPIOF->MODER &= (~(GPIO_MODER_MODE0_Msk | GPIO_MODER_MODE1_Msk)); //everything except for
-	GPIOF->MODER |= (0x02<<GPIO_MODER_MODE0_Pos | 0x02 << GPIO_MODER_MODE1_Pos);
+	GPIOF->MODER |= (0x03<<GPIO_MODER_MODE0_Pos | 0x03 << GPIO_MODER_MODE1_Pos);
 	GPIOF->OTYPER &= (~(GPIO_OTYPER_OT0_Msk | GPIO_OTYPER_OT1_Msk));
 	GPIOF->OTYPER |= (0x01 << GPIO_OTYPER_OT0_Pos | 0x01<<GPIO_OTYPER_OT1_Pos); //open drain
 	GPIOF->OSPEEDR &= (~(GPIO_OSPEEDR_OSPEED0_Msk | GPIO_OSPEEDR_OSPEED1_Msk));
@@ -20,17 +20,16 @@ void configureI2CBus1(void)
 	GPIOF->PUPDR |= 0x01<<GPIO_PUPDR_PUPD0_Pos | 0x01<<GPIO_PUPDR_PUPD1_Pos; //enabling internal pull ups on I2C lines
 
 	//turn on alternate function of I2C
-	GPIOF->AFR[0] |= 0x03; //alt function 3
-	GPIOF->AFR[0] |= 0x03 << (4*1); //PF1
+	GPIOF->AFR[0] |= 0x04; //alt function 3 //PF0
+	GPIOF->AFR[0] |= (0x04 << (4*1)); //PF1
 
-	I2C1->OAR1 &= ~(I2C_OAR1_ADDMODE_Msk | 0x3FF);
-	I2C1->OAR1 |= (0x30 << 1); //I2C1 address (may need to change)
-	I2C1->CR2 &= (~(I2C_CR2_FREQ_Msk));
-	I2C1->CR2 |= 0x05; //for 8mhz
-	I2C1->CCR &= (~(0xFFF)); // clears bits 11:0
-	I2C1->CCR |= 0x28;
-	I2C1->CR1 |= I2C_CR1_PE; //starts the protocol
-
+	I2C2->CR2 &= (~(I2C_CR2_FREQ_Msk));
+	I2C2->CR2 = 45; //for 45mhz = PCLK1 for AHB1 -> remember use decimal 45!
+	I2C2->CCR &= (~(0xFFF)); // clears bits 11:0
+	I2C2->CCR |= 0x28; //for 100KHz
+	I2C2->TRISE &= ~(I2C_TRISE_TRISE_Msk);
+	I2C2->TRISE |= 0x46; //
+	I2C2->CR1 = I2C_CR1_PE; //starts the protocol
 }
 
 
@@ -43,13 +42,13 @@ void configureSPIBus1(void) //for ADC transducers
 	GPIOA->PUPDR |= (0x01 << GPIO_PUPDR_PUPD5_Pos | 0x01 << GPIO_PUPDR_PUPD6_Pos | 0x01 << GPIO_PUPDR_PUPD7_Pos); //internal pull ups on SCK, MOSI and MISO
 	GPIOA->OTYPER &= (uint16_t)~(GPIO_OTYPER_OT5_Msk | GPIO_OTYPER_OT6_Msk | GPIO_OTYPER_OT7_Msk ); //push pull de
 	GPIOA->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED5_Msk | GPIO_OSPEEDR_OSPEED6_Msk | GPIO_OSPEEDR_OSPEED7_Msk);
-	GPIOA->OSPEEDR |= (0x02<<GPIO_OSPEEDR_OSPEED5_Pos | 0x02<<GPIO_OSPEEDR_OSPEED6_Pos | 0x02<<GPIO_OSPEEDR_OSPEED7_Pos); //fast mode
-	GPIOA->AFR[0] |= (0x05 << 4*5) | (0x05 << 4*6) | (0x05 << 4*7); //alternate function 5,5,5
+	GPIOA->OSPEEDR |= (0x03<<GPIO_OSPEEDR_OSPEED5_Pos | 0x03<<GPIO_OSPEEDR_OSPEED6_Pos | 0x03<<GPIO_OSPEEDR_OSPEED7_Pos); //fast mode
+    GPIOA->AFR[0] |= (5 << (4 * 5)) | (5 << (4 * 6)) | (5 << (4 * 7));
 
 	//Chip Select for Transducer: PG4
 	GPIOG->MODER |= 0x01 << GPIO_MODER_MODE4_Pos;
 	GPIOG->PUPDR &= ~(GPIO_PUPDR_PUPD4_Msk);
-	GPIOG->OTYPER |= 0x00 <<GPIO_OTYPER_OT4_Pos;
+	GPIOG->OTYPER &= ~(0x01 << GPIO_OTYPER_OT4_Pos); //Push Pull
 	GPIOG->OSPEEDR |= 0x01<<GPIO_OSPEEDR_OSPEED4_Pos;
 	GPIOG->ODR |= GPIO_ODR_OD4; //raise up CS of PG
 
@@ -64,19 +63,12 @@ void configureSPIBus1(void) //for ADC transducers
 	TIM7->ARR &= ~(TIM_ARR_ARR_Msk);
 	TIM7->PSC &= ~(TIM_PSC_PSC_Msk);
 
-	//halve the prescaler as load cell and other transducer share same SPI bus - around 20Hz for BOTH transactions
-	TIM7->ARR |= (40000-1);
-	TIM7->PSC |= (113-1);
-	TIM7->CR1 |= TIM_CR1_CEN; //enable TIM6
-	while((TIM7->SR & TIM_SR_UIF) == 0);
-	TIM7->SR &= ~(TIM_SR_UIF); //clear UIF
-
 	SPI1->CR1 &= (~(SPI_CR1_BR_Msk));
-	SPI1->CR1 |= (0x04 <<SPI_CR1_BR_Pos); //SPIclk/32
+	SPI1->CR1 |= (0x04 <<SPI_CR1_BR_Pos); //SPIclk/32 //~1MHZ
 
-	SPI1->CR1 &= (~(SPI_CR1_CPHA)); //
+	SPI1->CR1 |= (SPI_CR1_CPHA); //
 	//SPI1->CR1 |= SPI_CR1_CPHA; // CPHA mode 1 //comment for mode 0
-	SPI1->CR1 &= ~(SPI_CR1_CPOL);
+	SPI1->CR1 |= (SPI_CR1_CPOL);
 	//SPI1->CR1 |= SPI_CR1_CPOL; //CPOL mode 1 //comment for mode 0
 	//Clock is IDLE high, and polarity is on the falling edge!
 
@@ -86,7 +78,7 @@ void configureSPIBus1(void) //for ADC transducers
 	SPI1->CR1 &= ~(SPI_CR1_LSBFIRST); //MSB
 	SPI1->CR1 |= SPI_CR1_DFF; //16 bit mode has been selected!
 	SPI1->CR1 &= ~(SPI_CR1_RXONLY | SPI_CR1_BIDIMODE);
-	SPI1->CR1 |= (0x01 << SPI_CR1_SPE_Pos); //enables the protocol
+	SPI1->CR1 |= SPI_CR1_SPE; //enables the protocol
 }
 
 
@@ -180,12 +172,12 @@ void configureSPIBus4(void) //for flash memory storage
 
 void configureRCC_APB1(void)
 {
-	RCC->APB1ENR &= ~(RCC_APB1ENR_I2C1EN | RCC_APB1ENR_SPI3EN | RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM7EN);
-	RCC->APB1ENR |= RCC_APB1ENR_I2C1EN | RCC_APB1ENR_SPI3EN | RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM7EN;
-	RCC->APB1RSTR |= RCC_APB1RSTR_TIM2RST | RCC_APB1RSTR_I2C1RST |  RCC_APB1RSTR_SPI3RST | RCC_APB1RSTR_TIM6RST | RCC_APB1RSTR_TIM7RST;
+	RCC->APB1ENR &= ~(RCC_APB1ENR_I2C2EN | RCC_APB1ENR_SPI3EN | RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM7EN);
+	RCC->APB1ENR |= RCC_APB1ENR_I2C2EN | RCC_APB1ENR_SPI3EN | RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM7EN;
+	RCC->APB1RSTR |= RCC_APB1RSTR_TIM2RST | RCC_APB1RSTR_I2C2RST |  RCC_APB1RSTR_SPI3RST | RCC_APB1RSTR_TIM6RST | RCC_APB1RSTR_TIM7RST;
 	__ASM("NOP");
 	__ASM("NOP");
-	RCC->APB1RSTR &= (uint16_t)~(RCC_APB1RSTR_TIM2RST | RCC_APB1RSTR_I2C1RST | RCC_APB1RSTR_SPI3RST | RCC_APB1RSTR_TIM6RST | RCC_APB1RSTR_TIM7RST);
+	RCC->APB1RSTR &= (uint16_t)~(RCC_APB1RSTR_TIM2RST | RCC_APB1RSTR_I2C2RST | RCC_APB1RSTR_SPI3RST | RCC_APB1RSTR_TIM6RST | RCC_APB1RSTR_TIM7RST);
 	__ASM("NOP");
 	__ASM("NOP");
 	//configure for more timers when necessary
