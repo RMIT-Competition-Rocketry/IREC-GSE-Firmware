@@ -360,7 +360,7 @@
 #endif /* HAL_HASH_MODULE_ENABLED */
 
 #ifdef HAL_I2C_MODULE_ENABLED
- #include "stm32f4xx_hal_i2c.h"
+	#include "stm32f4xx_hal_i2c.h"
 #endif /* HAL_I2C_MODULE_ENABLED */
 
 #ifdef HAL_SMBUS_MODULE_ENABLED

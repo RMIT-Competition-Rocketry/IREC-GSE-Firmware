@@ -1,6 +1,7 @@
 ../Core/Src/I2C.c:11:6:I2C_init	24	static
-../Core/Src/I2C.c:23:6:I2C_send	16	static
-../Core/Src/I2C.c:39:6:I2C_sendBurst	32	static
-../Core/Src/I2C.c:58:6:I2C_receive	24	static
-../Core/Src/I2C.c:75:7:I2C_MultiReceive	32	static
-../Core/Src/I2C.c:94:6:I2C_TempExtract	32	static
+../Core/Src/I2C.c:22:6:I2C_recovery	24	static
+../Core/Src/I2C.c:35:6:I2C_send	24	static
+../Core/Src/I2C.c:78:6:I2C_sendBurst	32	static
+../Core/Src/I2C.c:121:6:I2C_receive	32	static
+../Core/Src/I2C.c:162:7:I2C_MultiReceive	32	static
+../Core/Src/I2C.c:204:6:I2C_TempExtract	32	static

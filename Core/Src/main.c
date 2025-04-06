@@ -182,6 +182,10 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+	HAL_StatusTypeDef ret;
+	uint8_t buf[12];
+	int16_t val;
+	float temp_c;
 
   /* USER CODE END 1 */
 
@@ -217,6 +221,7 @@ int main(void)
 	delay_software_ms(100); //important!!
 
 	MX_GPIO_Init();
+	//MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
 	configureSPIBus1();
 	configureSPIBus6(); //SPI6
@@ -285,7 +290,6 @@ int main(void)
 
 
 	//-------------------- RELAY ACTUATION GPIO --------------------------
-
 	//Relay 1 ->PURGE Relay
 	GPIO_init(&CH1_OP, GPIOB, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_DOWN, 0x0D);
 	GPIO_init(&CH1_ARM, GPIOB, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_DOWN,  0x0E);
@@ -410,7 +414,26 @@ uint8_t DIOmapping = 0;
 	LED_5.port -> ODR &= ~LED_5_PWR;
 	LED_6.port -> ODR &= ~LED_6_PWR;
 
+	CH1_ARM.port->ODR &= ~(CH1_Arm);
+	CH1_OP.port->ODR &= ~(CH1_Operate);
+
+
+	CH2_ARM.port->ODR &= ~(CH2_Arm);
+	CH2_OP.port->ODR &= ~(CH2_Operate);
+
+	CH3_ARM.port->ODR &= ~(CH3_Arm);
+	CH3_OP.port->ODR &= ~(CH3_Operate);
+
+	CH4_ARM.port->ODR &= ~(CH4_Arm);
+	CH4_OP.port->ODR &= ~(CH4_Operate);
+
 	state = 0x00;
+
+	while(1){
+		transmit_packets_spam();
+	}
+
+
 
 //Resetting Indentation from the start, cos I CBF changing the entire code - JC 0503025
 while (1) {
@@ -421,12 +444,8 @@ while (1) {
 	case 0:
 
 		__enable_irq();
-		/*
-while(1)
-{
-	transmit_packets_spam();
-}
-*/
+
+
 		LED_1.port -> ODR |= LED_1_PWR;
 		LED_2.port -> ODR |= LED_2_PWR;
 		LED_3.port -> ODR |= LED_3_PWR;
@@ -474,9 +493,9 @@ while(1)
 		if(triggerRX){RX_Receive();}else{__asm("NOP");}
 
 		//Extract Transducer Pressures
-		ADC124S021_extract(&Transducers);
+		//ADC124S021_extract(&Transducers);
 		//uint16_t response_test = ADC124S021_ReadChannel(0);
-		ADC124S021_process(&Transducers);
+		//ADC124S021_process(&Transducers);
 
 		//Check if SX1272 has recieved a packet, if not move on
 		if(triggerRX){RX_Receive();}else{}
@@ -619,8 +638,8 @@ while(1)
 		//Enable interrupts for LoRa
 		NVIC_EnableIRQ(EXTI9_5_IRQn);
 		NVIC_SetPriority(EXTI9_5_IRQn,9);
-		NVIC_EnableIRQ(TIM1_UP_TIM10_IRQn);
-		NVIC_SetPriority(TIM1_UP_TIM10_IRQn,10);
+		//NVIC_EnableIRQ(TIM1_UP_TIM10_IRQn);
+		//NVIC_SetPriority(TIM1_UP_TIM10_IRQn,10);
 
 		//Move to remote access output setting state
 		switch_case_state = 4;
@@ -1330,8 +1349,8 @@ void RX_Receive(void)
 	RX_result = SX1272_readReceive(&lora, pointerdata, LORA_MSG_LENGTH);
 	triggerRX = false;
 	GSE_Command.id= pointerdata[0];
-	GSE_Command.data[0]= pointerdata[3];
-	GSE_Command.data[1]= pointerdata[4];
+	GSE_Command.data[0]= pointerdata[1];
+	GSE_Command.data[1]= pointerdata[2];
 
 	state_inverse = (GSE_Command.data[0] & GSE_Command.data[1]);
 
@@ -1340,7 +1359,7 @@ void RX_Receive(void)
 		lora_error = ERROR_INVALID_PACKET_ID;
 		hardware_timer_count++;
 		__asm("NOP");
-		__NVIC_EnableIRQ(EXTI9_5_IRQn);
+		//__NVIC_EnableIRQ(EXTI9_5_IRQn);
 
 
 	}
@@ -1362,21 +1381,30 @@ void RX_Receive(void)
 				state = GSE_Command.data[0];
 				hardware_timer_count = 0;
 				uint8_t transmit_state = 0;
-				__NVIC_EnableIRQ(EXTI9_5_IRQn);
-				// Transmit response based on TX_Packet_Flag
-				/* get rid of ->  // to test RX and state change validation with RX command
+
+				uint8_t data[32];
+				data[0] = 0x06;
+				data[1] = 0x1;
+				data[2] = 0x2;
+				//__NVIC_EnableIRQ(EXTI9_5_IRQn);
+				//Transmit response based on TX_Packet_Flag
+				// to test RX and state change validation with RX command
+
 				switch(TX_Packet_Flag)
 				{
 				case 0:
-					LoRa_Packet packet_0 = LoRa_GSEData_1(0x06,
+					LoRa_Packet packet_0 = Dummy_Transmit();
+					/*
+					 LoRa_Packet packet_0 = LoRa_GSEData_1(0x06,
 							&Transducers,
 							&thermocouple_1,
 							&thermocouple_2,
 							&thermocouple_3,
 							&thermocouple_4,
 							error);
+					*/
 
-					SX1272_transmit(&lora, packet_0.data);
+					SX1272_transmit(&lora, (uint8_t*) &packet_0);
 				  	do
 				  	{
 				  		transmit_state = SX1272_readRegister(&lora, SX1272_REG_IRQ_FLAGS);
@@ -1388,15 +1416,20 @@ void RX_Receive(void)
 				  	TX_Packet_Flag = 1;
 				  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS); //resetting flag back to RXCONTINUOUS mode after flag has been set!
 					__NVIC_EnableIRQ(EXTI9_5_IRQn);
-					__NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
+					//__NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
 
 				  	break;
 				case 1:
+
+					LoRa_Packet packet_1 = Dummy_Transmit();
+					packet_1.id = 0x07;
+					/*
 					LoRa_Packet packet_1 = LoRa_GSEData_2(0x07,
 							&LoadCells,
 							&temp_sensor,
 							error);
-						SX1272_transmit(&lora, packet_1.data);
+					*/
+						SX1272_transmit(&lora, (uint8_t *)&packet_1);
 
 				  	do
 				  	{ //continuously poll status register for TX complete!
@@ -1407,15 +1440,16 @@ void RX_Receive(void)
 				  	TX_Packet_Flag = 0;
 				  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS);
 					__NVIC_EnableIRQ(EXTI9_5_IRQn);
-					__NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
+					//__NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
 				  	break;
+
 
 
 				  	//the program should NEVER end up here
 				default:
 					lora_error = ERROR_SYSTEM_STATE_FAILED;
 				}
-				*/ //P2 (end)
+				  //P2 (end)
 			}
 
 	}
@@ -1424,7 +1458,7 @@ void RX_Receive(void)
 		lora_error = ERROR_INVALID_PACKET_DATA;
 		hardware_timer_count++;
 		__asm("NOP");
-		__NVIC_EnableIRQ(EXTI9_5_IRQn);
+		//__NVIC_EnableIRQ(EXTI9_5_IRQn);
 	}
 
 
@@ -1433,11 +1467,19 @@ void RX_Receive(void)
 void transmit_packets_spam()
 {
 	uint8_t lora_spam_transmit = 0;
+
+	static LoRa_Packet packet0;
+	packet0.id = 0x06;
+	packet0.data[0] = 0x00;
+	packet0.data[1] = 0x01;
+	packet0.data[2] = 0x02;
+	packet0.data[3] = 0x03;
+	packet0.data[4] = 0x04;
+	packet0.data[5] = 0x05;
 	switch(lora_spam_transmit_state)
 	{
 	case 0:
-		LoRa_Packet packet0 = Dummy_Transmit();
-		SX1272_transmit(&lora, packet0.data);
+		SX1272_transmit(&lora, (uint8_t * ) &packet0);
 		do
 		{
 			lora_spam_transmit = SX1272_readRegister(&lora, SX1272_REG_IRQ_FLAGS);
@@ -1449,9 +1491,7 @@ void transmit_packets_spam()
 		//__NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
 	  	break;
 	case 1:
-
-		LoRa_Packet packet1 = Dummy_Transmit_2();
-		SX1272_transmit(&lora, packet1.data);
+		SX1272_transmit(&lora, (uint8_t * ) &packet0);
 		do
 		{
 			lora_spam_transmit = SX1272_readRegister(&lora, SX1272_REG_IRQ_FLAGS);
@@ -1463,7 +1503,6 @@ void transmit_packets_spam()
 	//	__NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
 	  	break;
 	}
-
 }
 
 /* USER CODE END 4 */
@@ -1482,23 +1521,7 @@ void Error_Handler(void)
   /* USER CODE END Error_Handler_Debug */
 }
 
-/*
-void transmit_packets_spam()
-{
-switch(lora_spam_transmit_state)
-{
-case 0:
-	LoRa_Packet packet0 =
 
-
-
-case 1:
-
-
-
-}
-
-*/
 
 #ifdef  USE_FULL_ASSERT
 /**
