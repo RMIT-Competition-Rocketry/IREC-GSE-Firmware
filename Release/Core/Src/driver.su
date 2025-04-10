@@ -1,0 +1,8 @@
+../Core/Src/driver.c:10:7:configureI2CBus1	0	static
+../Core/Src/driver.c:37:6:configureSPIBus1	0	static
+../Core/Src/driver.c:85:6:configureSPIBus6	0	static
+../Core/Src/driver.c:134:6:configureSPIBus4	0	static
+../Core/Src/driver.c:173:6:configureRCC_APB1	0	static,ignoring_inline_asm
+../Core/Src/driver.c:186:6:configureRCC_APB2	0	static,ignoring_inline_asm
+../Core/Src/driver.c:198:6:configureRCC_AHB1	0	static,ignoring_inline_asm
+../Core/Src/driver.c:207:6:configure_TIM1	0	static,ignoring_inline_asm

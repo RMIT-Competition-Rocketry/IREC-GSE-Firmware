@@ -1,0 +1,14 @@
+../Core/Src/sensor.c:63:6:ADC124S021_process	16	static
+../Core/Src/sensor.c:148:6:MCP96RL00_EMX_1_process	24	static
+../Core/Src/sensor.c:213:6:ADT75ARMZ_process	24	static
+../Core/Src/sensor.c:22:6:ADC124S021_extract	24	static
+../Core/Src/sensor.c:137:6:MCP96RL00_EMX_1_extract	16	static
+../Core/Src/sensor.c:232:6:ADT75ARMZ_write	16	static
+../Core/Src/sensor.c:204:6:ADT75ARMZ_extract	16	static
+../Core/Src/sensor.c:13:6:ADC124S021_init	24	static
+../Core/Src/sensor.c:176:6:MCP96RL00_EMX_1_write	40	static
+../Core/Src/sensor.c:103:6:MCP96RL00_EMX_1_init	40	static
+../Core/Src/sensor.c:187:6:ADT75ARMZ_init	40	static
+../Core/Src/sensor.c:243:10:ADC124S021_ReadChannel	0	static
+../Core/Src/sensor.c:268:6:delay_software_us	0	static
+../Core/Src/sensor.c:276:6:delay_software_ms	0	static

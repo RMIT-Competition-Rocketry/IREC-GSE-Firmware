@@ -78,11 +78,17 @@ void SX1272_init(
   /** @todo set spreading factor */
   SX1272_writeRegister(lora, SX1272_REG_MODEM_CONFIG2, 0x94);
 
+  //Set both Tx and Rx FIFO base addresses to 0x00
+  SX1272_writeRegister(lora, SX1272_REG_FIFO_TX_BASE_ADDR, 0x00); // Tx starts at 0x00
+  SX1272_writeRegister(lora, SX1272_REG_FIFO_RX_BASE_ADDR, 0x00); // Rx starts at 0x00
+
+
   // Set payload length
   SX1272_writeRegister(lora, SX1272_REG_PAYLOAD_LENGTH, LORA_MSG_LENGTH);
   SX1272_writeRegister(lora, SX1272_REG_MAX_PAYLOAD_LENGTH, LORA_MSG_LENGTH);
 
   _SX1272_setMode(lora, SX1272_MODE_STDBY); // Set mode to Standby mode!
+
 
 }
 
@@ -375,8 +381,17 @@ void _SX1272_setMode(SX1272_t *lora, SX1272_Mode mode) {
  * ============================================================================================== */
 void SX1272_enableBoost(SX1272_t *lora, bool enable) {
   uint8_t regPaConfig  = SX1272_readRegister(lora, SX1272_REG_PA_CONFIG); // Read current config
-  regPaConfig         &= ~SX1272_PA_SELECT;                               // Mask out PA select bit
-  SX1272_writeRegister(lora, SX1272_REG_PA_CONFIG, regPaConfig | SX1272_PA_SELECT);
+  regPaConfig         |= SX1272_PA_SELECT;								//Set PA Boost Select
+  regPaConfig 		  |= 0x0F;											//Set Gain to MAX
+  SX1272_writeRegister(lora, SX1272_REG_PA_CONFIG, regPaConfig);
+  regPaConfig  = SX1272_readRegister(lora, SX1272_REG_PA_CONFIG);		 //DEBUGGING -  Read back in current config and ensure its as expected
+  uint8_t regPaDac = SX1272_readRegister(lora, 0x5A);
+  regPaDac |= 0x07;														//Set PaDac to +20dbm mode
+  SX1272_writeRegister(lora, 0x5A, regPaDac);
+  uint8_t regOpC = SX1272_readRegister(lora, 0x0B);
+  regOpC |= 0b00100000;														//Disable Overcurrent protection
+  SX1272_writeRegister(lora, 0x0B, regOpC);
+  regPaDac = SX1272_readRegister(lora, 0x0B);							//DEBUGGING - Read back in current config and ensure its as expected
 }
 
 /* ============================================================================================== */
@@ -403,6 +418,7 @@ void SX1272_standby(SX1272_t *lora) {
 void SX1272_transmit(SX1272_t *lora, uint8_t *pointerdata) {
   // Set device to standby
   _SX1272_setMode(lora, SX1272_MODE_STDBY);
+  SX1272_enableBoost(lora, true);
 
   // TODO: add in proper read-mask-write operation for setting DIO mapping
   //

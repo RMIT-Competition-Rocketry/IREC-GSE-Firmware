@@ -1,0 +1,7 @@
+../Core/Src/I2C.c:11:6:I2C_init	1
+../Core/Src/I2C.c:22:6:I2C_recovery	2
+../Core/Src/I2C.c:35:6:I2C_send	10
+../Core/Src/I2C.c:121:6:I2C_receive	11
+../Core/Src/I2C.c:78:6:I2C_sendBurst	12
+../Core/Src/I2C.c:162:7:I2C_MultiReceive	12
+../Core/Src/I2C.c:204:6:I2C_TempExtract	20

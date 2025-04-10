@@ -1,0 +1,6 @@
+../Core/Src/spi.c:48:10:SPI_transmit	2
+../Core/Src/spi.c:65:13:SPI_send8	2
+../Core/Src/spi.c:70:13:SPI_send16	2
+../Core/Src/spi.c:85:13:SPI_receive8	2
+../Core/Src/spi.c:90:13:SPI_receive16	2
+../Core/Src/spi.c:28:6:SPI_init	1

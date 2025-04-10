@@ -41,14 +41,15 @@
 
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim6;
-
+I2C_HandleTypeDef hi2c2;
 /* USER CODE BEGIN PV */
+
 //These are here instead of main.h as I don't wanna go into different documents to remember definitions
 uint8_t switch_case_state = 0; //global variable for state machine!
 uint8_t state = 0;
 uint8_t state_local = 0;
 uint8_t local_dump_flag = 0;
-uint16_t error = 0;
+static uint16_t error = 0;
 uint8_t hardware_timer_count = 0;
 uint8_t dump_flag = 0;
 uint8_t TX_Packet_Flag = 0; //ID 7
@@ -57,13 +58,14 @@ volatile uint8_t test_rx_interrupt =0;
 uint8_t lora_error = 0; //mainly for lora comms error state
 bool triggerRX = false;
 uint8_t pointerdata[LORA_MSG_LENGTH];
-uint8_t state_inverse = 0x00; //random value to start with
 uint8_t lora_error_test = 0;
 
 
 
 uint8_t lora_spam_transmit_state = 0;
 
+
+//Failure Mode Variables
 int max_temp_failure_mode = 38.0;
 int max_temp_error_mode = 35.0;
 
@@ -86,21 +88,23 @@ int min_weight_error_mode = 4.1;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_TIM6_Init(void);
 static void MX_I2C2_Init(void);
+//static void MX_TIM6_Init(void); -- NEED TO IMPLEMENT LORA PACKET TIMELOUT
 /* USER CODE BEGIN PFP */
 
  static SX1272_t lora;
- static LoRa_Packet GSE_GCS1;
- static LoRa_Packet GSE_GCS2;
+ static LoRa_Packet packet;
  static LoRa_Packet GSE_Command;
 
+// For future expansion - flash storage
+ //static Flash flash;
 
- static Flash flash;
- //sensors*******************************************
+ //************************* sensors*******************************************
+ //Currently commented out - internal functions to main.c and HAL libs used to date - JC 07-04-2025
+
  //do it for each sensor/converter
  //I2C
- static ADT75ARMZ temp_sensor;
+// static ADT75ARMZ temp_sensor;
  static MCP96RL00_EMX_1 thermocouple_1;
  static MCP96RL00_EMX_1 thermocouple_2;
  static MCP96RL00_EMX_1 thermocouple_3;
@@ -109,9 +113,11 @@ static void MX_I2C2_Init(void);
  static ADC124S021 LoadCells;
  static ADC124S021 Transducers;
 
+
  //interrupt driven GPIO
  static GPIO LoRa_Rx_int;
- static GPIO temperature_alert;
+ //For furture expansion - temp alerts by GPIO interupt
+ //static GPIO temperature_alert;
 
  //normal GPIO*********************************************
 
@@ -162,15 +168,47 @@ static void MX_I2C2_Init(void);
  static GPIO DUM_SW;  //turns out DUMP cannot be used as a variable name (DUMP_SW)
  static GPIO N2O_SW;
  static GPIO O2_IS_SW; //IS = ISO
- static GPIO N2O_IS_SW;
+ //static GPIO N2O_IS_SW;
  static GPIO IGNITION_IS_SW;
  static GPIO N2O_DEAD_SW;
  static GPIO O2_DEAD_SW;
  static GPIO IGNITE_DEAD_SW;
+
+
+
+
+
+ static GPIO RF_SW;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+
+//HAL LIB I2C COMMS SETUP - Added JC 07-04-2025
+ typedef struct{
+	 uint8_t ADDR;
+	 uint8_t ID[1];
+	 uint8_t resolution;
+	 char thermocouple_type;
+	 float temp;
+ }TEMP_SENSE;
+
+ typedef struct{
+	 bool comms_ok;
+	 uint8_t return_length;
+	 uint8_t return_value[16];
+ }i2c_comms_result;
+
+
+ TEMP_SENSE SMD_TEMP_SENSE = {.ADDR = 0x48 << 1, .resolution = 0xC, .thermocouple_type = 0x00}; //Use 8-bit address;
+ TEMP_SENSE THERMOCOUPLE_1 = {.ADDR = 0b11000000, .resolution = 0x12, .thermocouple_type = 'K'};
+ TEMP_SENSE THERMOCOUPLE_2 = {.ADDR = 0b11000010, .resolution = 0x12, .thermocouple_type = 'J'};
+ TEMP_SENSE THERMOCOUPLE_3 = {.ADDR = 0b11000100, .resolution = 0x12, .thermocouple_type = 'J'};
+ TEMP_SENSE THERMOCOUPLE_4 = {.ADDR = 0b11000110, .resolution = 0x12, .thermocouple_type = 'J'};
+
+ i2c_comms_result config_thermocouple();
+ i2c_comms_result get_temp(TEMP_SENSE *temp_sense);
 
 /* USER CODE END 0 */
 
@@ -182,10 +220,6 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-	HAL_StatusTypeDef ret;
-	uint8_t buf[12];
-	int16_t val;
-	float temp_c;
 
   /* USER CODE END 1 */
 
@@ -221,12 +255,13 @@ int main(void)
 	delay_software_ms(100); //important!!
 
 	MX_GPIO_Init();
+	MX_I2C2_Init();
 	//MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
 	configureSPIBus1();
 	configureSPIBus6(); //SPI6
  // configureSPIBus4();
-	configureI2CBus1();
+	//configureI2CBus1();
 
 //*******************************NORMAL GPIO INITALISATIONS*************************************************************
 
@@ -285,8 +320,14 @@ int main(void)
 	//-------------------- IGNITE ACTUATION GPIO --------------------------
 	GPIO_init(&Ignition1_ARM, GPIOD, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_DOWN, 0x0F);
 	GPIO_init(&Ignition1_OP ,GPIOD, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_DOWN, 0x0E);
+
+
+
 	GPIO_init(&Ignition2_ARM, GPIOG, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_DOWN, 0x03);
-	GPIO_init(&Ignition2_OP ,GPIOG, GPIO_MODER_INPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_DOWN, 0x02);
+	GPIO_init(&Ignition2_OP ,GPIOG, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_DOWN, 0x02);
+	//Disarm Ignition circuit
+	Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+	Ignition2_OP.port->ODR |= (IGNITION2_OP);
 
 
 	//-------------------- RELAY ACTUATION GPIO --------------------------
@@ -310,6 +351,12 @@ int main(void)
 	 GPIO_init(&CH4_ARM, GPIOD, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_DOWN, 0x0A);
 	 GPIO_init(&CH4_MON, GPIOD, GPIO_MODER_INPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_DOWN, 0x0D);
 
+
+
+	 GPIO_init(&RF_SW, GPIOG, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x0A);
+
+	 RF_SW.port->ODR |= (GPIO_ODR_OD10);
+
 	 //Ensure CH1-4 is turned off, as its currently unused
 	 CH1_ARM.port->ODR &= ~(CH1_Arm);
 	 CH1_OP.port->ODR &= ~(CH1_Operate);
@@ -320,23 +367,24 @@ int main(void)
 	 CH4_ARM.port->ODR &= ~(CH4_Arm);
 	 CH4_OP.port->ODR &= ~(CH4_Operate);
 
-
-
 	//*******************************SENSOR CONFIG INITALISATIONS*************************************************************
+
+
+	 //*******************************NOTE - Updated to use HAL libraries, and funcions within main.c*************************************************************
+	 // Done by JC - 07/04/2025, for first legacy launch
+
 	//ADT75ARMZ_init(&temp_sensor, I2C2, GPIOF,TEMPERATURE_SENSOR, 0x48);
 
 	//conversion rate is 63ms for thermocouple conversion. Conversion will be 63ms + (time it takes to do 4 I2C read operations)
-//	MCP96RL00_EMX_1_init(&thermocouple_1,I2C2, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, THERMOCOUPLE_1_ADDR);
+	//MCP96RL00_EMX_1_init(&thermocouple_1,I2C2, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, THERMOCOUPLE_1_ADDR);
 	//MCP96RL00_EMX_1_init(&thermocouple_2,I2C2, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, THERMOCOUPLE_2_ADDR);
 	//MCP96RL00_EMX_1_init(&thermocouple_3,I2C2, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, THERMOCOUPLE_3_ADDR);
 	//MCP96RL00_EMX_1_init(&thermocouple_4,I2C2, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, THERMOCOUPLE_4_ADDR);
 
-	ADC124S021_init(&LoadCells,Load_Cell, LOAD_CELL_PORT, LOAD_CELL_CS);
-	ADC124S021_init(&Transducers,Transducer, TRANSDUCER_PORT, TRANSDUCER_CS);
+	//ADC124S021_init(&LoadCells,Load_Cell, LOAD_CELL_PORT, LOAD_CELL_CS);
+	//ADC124S021_init(&Transducers,Transducer, TRANSDUCER_PORT, TRANSDUCER_CS);
 
 	//configure_TIM1(); //start LoRa timer -> as late as possible!
-
-
 
 
 
@@ -373,13 +421,7 @@ int main(void)
  *  B1: Gas Filled
  *  B0: System Activate -> nothing can be done unless this bit is set
  */
-uint8_t LoRa_test_RX_Packets_received = 0;
-uint8_t LoRa_Frequency_MSB = 0;
-uint8_t LoRa_Frequency_MiB = 0;
-uint8_t LoRa_Frequency_LSB = 0;
 
-uint8_t RXDone_CHK = 0;
-uint8_t DIOmapping = 0;
 
 
 	//INT_pin_input = (GPIOD->IDR & GPIO_IDR_IDR_7); //should be a non 0 value here!
@@ -404,7 +446,6 @@ uint8_t DIOmapping = 0;
 	SX1272_init(&lora,"GSE_LORA", LORA_PORT, LORA_CS, SX1272_BW500, SX1272_SF9, SX1272_CR5);
 	SX1272_startReceive(&lora);
 	SX1272_clearIRQ(&lora, SX1272_LORA_IRQ_RXDONE);
-	//uint8_t DATAA = 0; -> for testing loRa
 
 	//Ensure SMD LEDs are turned OFF on bootup
 	LED_1.port -> ODR &= ~LED_1_PWR;
@@ -429,12 +470,24 @@ uint8_t DIOmapping = 0;
 
 	state = 0x00;
 
+
+	RF_SW.port->ODR |= (GPIO_ODR_OD10);
+	RF_SW.port->ODR &= ~(GPIO_ODR_OD10);
+	RF_SW.port->ODR |= (GPIO_ODR_OD10);
+	RF_SW.port->ODR &= ~(GPIO_ODR_OD10);
+	RF_SW.port->ODR |= (GPIO_ODR_OD10);
+	RF_SW.port->ODR &= ~(GPIO_ODR_OD10);
+
+	//Debugging LoRa Step - move straight into spamming packets
+	/*
 	while(1){
 		transmit_packets_spam();
 	}
+	*/
 
 
 
+	switch_case_state = 0x0;
 //Resetting Indentation from the start, cos I CBF changing the entire code - JC 0503025
 while (1) {
 
@@ -541,6 +594,17 @@ while (1) {
 		//no error checking currently implemented with internal temperature
 	//	ADT75ARMZ_extract(&temp_sensor, data_thermo, 0x48);
 	//	ADT75ARMZ_process(&temp_sensor);
+
+		i2c_comms_result result = get_temp(&SMD_TEMP_SENSE);
+		if (result.comms_ok){
+			for (uint8_t i = 0; i <= result.return_length; i++) {
+				uint8_t * floatPtr = (uint8_t *) &SMD_TEMP_SENSE.temp;
+				floatPtr[i] = result.return_value[i];
+			}
+		}
+		else {
+			SMD_TEMP_SENSE.temp = 0x00;
+		}
 
 		//Check if SX1272 has recieved a packet, if not move on
 		if(triggerRX){RX_Receive();}else{__asm("NOP");}
@@ -1139,31 +1203,42 @@ while (1) {
 		//Spark Generation Sequence, 5 sparks total
 	//	Ignition1_ARM.port->ODR |= IGNITION1_ARM;
 		//Ignition1_OP.port->ODR |= IGNITION1_OP;
-		Ignition2_ARM.port->ODR |= IGNITION2_ARM;
-		Ignition2_OP.port->ODR |= IGNITION2_OP;
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition1_OP.port->ODR &= ~(IGNITION2_OP);
+		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
+		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition1_OP.port->ODR |= (IGNITION2_OP);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
+		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
+		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition1_OP.port->ODR &= ~(IGNITION2_OP);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
+		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
+		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition1_OP.port->ODR |= (IGNITION2_OP);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
+		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
+		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition1_OP.port->ODR &= ~(IGNITION2_OP);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition1_OP.port->ODR |= (IGNITION2_OP);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition1_OP.port->ODR &= ~(IGNITION2_OP);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition1_OP.port->ODR |= (IGNITION2_OP);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition1_OP.port->ODR &= ~(IGNITION2_OP);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
+		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
+		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
 		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
 
 		//Disarm Ignition circuit
-		Ignition1_ARM.port->ODR &= ~(IGNITION2_ARM);
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
 
+		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
 
 		//Manually removes "ignition" state bit from last read LoRa packet info
 		state &= ~(0x02 <<2); //this if more so for remote control 0bxxxx11xx become 0
@@ -1253,7 +1328,53 @@ void MX_GPIO_Init(void)
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
+
 /* USER CODE BEGIN 4 */
+
+static void MX_I2C2_Init(void)
+{
+
+  /* USER CODE BEGIN I2C2_Init 0 */
+
+  /* USER CODE END I2C2_Init 0 */
+
+  /* USER CODE BEGIN I2C2_Init 1 */
+
+  /* USER CODE END I2C2_Init 1 */
+  hi2c2.Instance = I2C2;
+  hi2c2.Init.ClockSpeed = 100000;
+  hi2c2.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c2.Init.OwnAddress1 = 0;
+  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c2.Init.OwnAddress2 = 0;
+  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c2, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C2_Init 2 */
+
+  /* USER CODE END I2C2_Init 2 */
+
+}
+
+
 
   /** Configure Digital filter
   */
@@ -1345,14 +1466,15 @@ void RX_Receive(void)
 	__NVIC_DisableIRQ(EXTI9_5_IRQn); //uncomment after testing!!
 	__NVIC_DisableIRQ(TIM1_UP_TIM10_IRQn); //Disable IQR for LoRa Hardware Timer
 
-	bool RX_result = false;
-	RX_result = SX1272_readReceive(&lora, pointerdata, LORA_MSG_LENGTH);
+	delay_software_ms(100); //important!!
+
+
+	bool RX_result = SX1272_readReceive(&lora, pointerdata, LORA_MSG_LENGTH);
 	triggerRX = false;
 	GSE_Command.id= pointerdata[0];
 	GSE_Command.data[0]= pointerdata[1];
 	GSE_Command.data[1]= pointerdata[2];
 
-	state_inverse = (GSE_Command.data[0] & GSE_Command.data[1]);
 
 	if(GSE_Command.id != 0x02)
 	{
@@ -1364,36 +1486,56 @@ void RX_Receive(void)
 
 	}
 	// Double Checks Valid Data
-	else if (state_inverse == 0)
+	else if ((GSE_Command.data[0] & GSE_Command.data[1]) == 0x00)
 	{
-		if((GSE_Command.data[0] & 0x01) != 1)//0) //ID is correct (as the ID does = 0x02, as per previous if statement)
-			{
-				//IF SYSTEM ON bit is 0
-				state = 0; //make sure everything is OFF
-				//make sure LED is OFF as well!
-				led_power.port->ODR |= (PWR_LED & 0x00);
-			}
-			else //ID is correct AND state bit0 == 1
-			{
-				led_power.port->ODR |= PWR_LED; //Turn ON LED
-				lora_error_test++;
-				//state = GSE_Command.id; //temporary value
-				state = GSE_Command.data[0];
-				hardware_timer_count = 0;
-				uint8_t transmit_state = 0;
+		led_power.port->ODR |= PWR_LED; //Turn ON LED
+		lora_error_test++;
+		//state = GSE_Command.id; //temporary value
+		state = GSE_Command.data[0];
+		hardware_timer_count = 0;
+		uint8_t transmit_state = 0;
+		//__NVIC_EnableIRQ(EXTI9_5_IRQn);
 
-				uint8_t data[32];
-				data[0] = 0x06;
-				data[1] = 0x1;
-				data[2] = 0x2;
-				//__NVIC_EnableIRQ(EXTI9_5_IRQn);
-				//Transmit response based on TX_Packet_Flag
-				// to test RX and state change validation with RX command
+		//Transmit response based on TX_Packet_Flag
+		// to test RX and state change validation with RX command
+		switch(TX_Packet_Flag)
+		{
+		case 0:
+				packet = Dummy_Transmit();
+				packet.id = 0x06;
 
-				switch(TX_Packet_Flag)
-				{
-				case 0:
-					LoRa_Packet packet_0 = Dummy_Transmit();
+				packet.data[0] = 0x00;
+				packet.data[1] = 0x00;
+				packet.data[2] = 0x00;
+				packet.data[3] = 0x00;
+				packet.data[4] = 0x00;
+				packet.data[5] = 0x00;
+				packet.data[6] = 0x00;
+				packet.data[7] = 0x00;
+				packet.data[8] = 0x00;
+				packet.data[9] = 0x00;
+				packet.data[10] = 0x00;
+				packet.data[11] = 0x00;
+				packet.data[12] = 0x00;
+				packet.data[13] = 0x00;
+				packet.data[14] = 0x00;
+				packet.data[15] = 0x00;
+				packet.data[16] = 0x00;
+				packet.data[17] = 0x00;
+				packet.data[18] = 0x00;
+				packet.data[19] = 0x00;
+				packet.data[20] = 0x00;
+				packet.data[21] = 0x00;
+				packet.data[22] = 0x00;
+				packet.data[23] = 0x00;
+				packet.data[24] = 0x00;
+				packet.data[25] = 0x00;
+				packet.data[26] = 0x00;
+				packet.data[27] = 0x00;
+				packet.data[28] = 0x00;
+				packet.data[29] = 0x00;
+				packet.data[30] = 0x00;
+
 					/*
 					 LoRa_Packet packet_0 = LoRa_GSEData_1(0x06,
 							&Transducers,
@@ -1403,56 +1545,80 @@ void RX_Receive(void)
 							&thermocouple_4,
 							error);
 					*/
+			  	TX_Packet_Flag = 1;
 
-					SX1272_transmit(&lora, (uint8_t*) &packet_0);
-				  	do
-				  	{
-				  		transmit_state = SX1272_readRegister(&lora, SX1272_REG_IRQ_FLAGS);
-				  	}while((transmit_state & 0x08) == 0x00); //will continue if transmit state and 0x08 are the same or 0
-				  	//wait for Tx complete!
+				break;
+		case 1:
 
-
-				  	SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
-				  	TX_Packet_Flag = 1;
-				  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS); //resetting flag back to RXCONTINUOUS mode after flag has been set!
-					__NVIC_EnableIRQ(EXTI9_5_IRQn);
-					//__NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
-
-				  	break;
-				case 1:
-
-					LoRa_Packet packet_1 = Dummy_Transmit();
-					packet_1.id = 0x07;
-					/*
-					LoRa_Packet packet_1 = LoRa_GSEData_2(0x07,
-							&LoadCells,
-							&temp_sensor,
-							error);
-					*/
-						SX1272_transmit(&lora, (uint8_t *)&packet_1);
-
-				  	do
-				  	{ //continuously poll status register for TX complete!
-				  		transmit_state = SX1272_readRegister(&lora, SX1272_REG_IRQ_FLAGS);
-				  	}while((transmit_state & 0x08) == 0x00);
-
-				  	SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
-				  	TX_Packet_Flag = 0;
-				  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS);
-					__NVIC_EnableIRQ(EXTI9_5_IRQn);
-					//__NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
-				  	break;
+				packet = Dummy_Transmit();
+				packet.id = 0x07;
 
 
+				packet.data[0] = GSE_Command.data[0];
+				uint8_t * floatPtr = (uint8_t *) &SMD_TEMP_SENSE.temp;
+				packet.data[1] = floatPtr[3];
+				packet.data[2] = floatPtr[2];
+				packet.data[3] = floatPtr[1];
+				packet.data[4] = floatPtr[0];
 
-				  	//the program should NEVER end up here
-				default:
-					lora_error = ERROR_SYSTEM_STATE_FAILED;
-				}
-				  //P2 (end)
-			}
+				packet.data[5] = 0x00;
+				packet.data[6] = 0x00;
+				packet.data[7] = 0x00;
+				packet.data[8] = 0x00;
+				packet.data[9] = 0x00;
+				packet.data[10] = 0x00;
+				packet.data[11] = 0x00;
+				packet.data[12] = 0x00;
+				packet.data[13] = 0x00;
+				packet.data[14] = 0x00;
+				packet.data[15] = 0x00;
+				packet.data[16] = 0x00;
+				packet.data[17] = 0x00;
+				packet.data[18] = 0x00;
+				packet.data[19] = 0x00;
+				packet.data[20] = 0x00;
+				packet.data[21] = 0x00;
+				packet.data[22] = 0x00;
+				packet.data[23] = 0x00;
+				packet.data[24] = 0x00;
+				packet.data[25] = 0x00;
+				packet.data[26] = 0x00;
+				packet.data[27] = 0x00;
+				packet.data[28] = 0x00;
+				packet.data[29] = 0x00;
+				packet.data[30] = 0x00;
+				/*
+				LoRa_Packet packet_1 = LoRa_GSEData_2(0x07,
+					&LoadCells,
+					&temp_sensor,
+					error);
+				*/
+			  	TX_Packet_Flag = 0;
 
+				break;
+		//the program should NEVER end up here
+		default:
+				lora_error = ERROR_SYSTEM_STATE_FAILED;
+		} //P2 (end)
+
+		RF_SW.port->ODR &= ~(GPIO_ODR_OD10);
+		//Transmit the packet!
+		SX1272_transmit(&lora, (uint8_t*) &packet);
+	  	do
+	  	{
+	  		transmit_state = SX1272_readRegister(&lora, SX1272_REG_IRQ_FLAGS);
+	  	}while((transmit_state & 0x08) == 0x00); //will continue if transmit state and 0x08 are the same or 0
+	  	//wait for Tx complete!
+
+	  	RF_SW.port->ODR |= (GPIO_ODR_OD10);
+
+	  	SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
+	  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS); //resetting flag back to RXCONTINUOUS mode after flag has been set!
+		__NVIC_EnableIRQ(EXTI9_5_IRQn);
+		//__NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
 	}
+
+
 	else
 	{
 		lora_error = ERROR_INVALID_PACKET_DATA;
@@ -1469,7 +1635,6 @@ void transmit_packets_spam()
 	uint8_t lora_spam_transmit = 0;
 
 	static LoRa_Packet packet0;
-	packet0.id = 0x06;
 	packet0.data[0] = 0x00;
 	packet0.data[1] = 0x01;
 	packet0.data[2] = 0x02;
@@ -1479,6 +1644,8 @@ void transmit_packets_spam()
 	switch(lora_spam_transmit_state)
 	{
 	case 0:
+		packet0.id = 0x06;
+		RF_SW.port->ODR |= (GPIO_ODR_OD10);
 		SX1272_transmit(&lora, (uint8_t * ) &packet0);
 		do
 		{
@@ -1489,8 +1656,13 @@ void transmit_packets_spam()
 	  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS);
 		__NVIC_EnableIRQ(EXTI9_5_IRQn);
 		//__NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
+
+		RF_SW.port->ODR &=  ~(GPIO_ODR_OD10);
+		lora_spam_transmit_state = 1;
 	  	break;
 	case 1:
+		packet0.id = 0x07;
+		RF_SW.port->ODR |= (GPIO_ODR_OD10);
 		SX1272_transmit(&lora, (uint8_t * ) &packet0);
 		do
 		{
@@ -1501,6 +1673,8 @@ void transmit_packets_spam()
 	  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS);
 		__NVIC_EnableIRQ(EXTI9_5_IRQn);
 	//	__NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
+		lora_spam_transmit_state = 0;
+		RF_SW.port->ODR &= ~(GPIO_ODR_OD10);
 	  	break;
 	}
 }
@@ -1520,6 +1694,96 @@ void Error_Handler(void)
     {__asm("NOP");}
   /* USER CODE END Error_Handler_Debug */
 }
+
+
+
+
+
+
+i2c_comms_result get_temp(TEMP_SENSE *temp_sense){
+
+	i2c_comms_result result;
+
+	//If its not a thermocouple, its the SMD temp sense
+	if(temp_sense -> thermocouple_type == 0x00){
+
+		uint8_t buf[4];
+		buf[0] = 0x00;
+		uint8_t ret;
+		ret = HAL_I2C_Master_Transmit(&hi2c2, temp_sense -> ADDR, buf[0], 1, HAL_MAX_DELAY);
+		if (ret != HAL_OK){
+			  result.comms_ok = false;
+		}
+		else {
+			  ret = HAL_I2C_Master_Receive(&hi2c2, temp_sense -> ADDR, result.return_value, 2, HAL_MAX_DELAY);
+
+			  if (ret != HAL_OK){
+				  result.comms_ok = false;
+			  }
+			  else{
+
+				  uint16_t val = ((int16_t)result.return_value[0]<<4) | (result.return_value[1] >> 4);
+				  float temp = val/16;
+				  uint8_t * tempPointer = (uint8_t *) &temp;
+				  result.return_value[0] = tempPointer[0];
+				  result.return_value[1] = tempPointer[1];
+				  result.return_value[2] = tempPointer[2];
+				  result.return_value[3] = tempPointer[3];
+				  result.return_length = 0x04;
+
+				  result.comms_ok = true;
+			  }
+		}
+
+	}
+
+	//Its got a thermocouple type, therefore, lets get the thermocouple hot junc temp
+	else{
+		uint8_t ret;
+		ret = HAL_I2C_Master_Transmit(&hi2c2, (temp_sense -> ADDR | 0x00), 0x00, 1, 100); //Write to thermocouple IC, to move pointer to hot junc reg
+		if (ret != HAL_OK){
+			result.comms_ok = false;
+		}
+		else {
+			ret = HAL_I2C_Master_Receive(&hi2c2, (temp_sense -> ADDR | 0x01), result.return_value, 2, 100);	//Read 2 bytes from the hot junc reg into return val
+			if (ret != HAL_OK){
+				result.comms_ok = false;
+			}
+			else{
+
+				uint16_t val = ((int16_t)result.return_value[0] * 16) | (result.return_value[1]);
+				float temp = val/16;
+				if ((result.return_value[0] & 0x80) == 0x80){ //If the temp is < 0deg
+					temp = temp - 4096;
+				}
+				uint8_t * tempPointer = (uint8_t *) &temp;
+				result.return_value[0] = tempPointer[0];
+				result.return_value[1] = tempPointer[1];
+				result.return_value[2] = tempPointer[2];
+				result.return_value[3] = tempPointer[3];
+				result.return_length = 0x04;
+
+				result.comms_ok = true;
+			}
+		}
+	}
+
+
+	return result;
+
+};
+
+i2c_comms_result config_thermocouple(TEMP_SENSE *temp_sense){
+	i2c_comms_result result;
+
+
+
+
+
+	return result;
+}
+
+
 
 
 

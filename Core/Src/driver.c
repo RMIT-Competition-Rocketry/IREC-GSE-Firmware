@@ -121,7 +121,7 @@ void configureSPIBus6(void)// 	//for both additional 5V channels and LoRa
 	GPIOG->AFR[1] |= ((0x05 << 4*4) | (0x05 << 5*4) | (0x05 << 6*4));// alternate functions for SPI3
 
     SPI6->CR1 &= ~(SPI_CR1_BR_Msk); // Clear baud rate bits
-    SPI6->CR1 |= (0x02 << SPI_CR1_BR_Pos); // SPIclk/8
+    SPI6->CR1 |= (0x03 << SPI_CR1_BR_Pos); // SPIclk/8
     SPI6->CR1 &= ~(SPI_CR1_CPHA_Msk | SPI_CR1_CPOL_Msk); // CPHA = 0, CPOL = 0
     SPI6->CR1 |= SPI_CR1_MSTR; // Master mode
     SPI6->CR1 |= SPI_CR1_SSM | SPI_CR1_SSI; // Software slave management
