@@ -34,10 +34,9 @@ extern "C" {
 #include "driver.h"
 #include "gpio.h"
 #include "I2C.h"
-#include "sensors.h"
 #include "spi.h"
 #include "lora.h"
-#include "flash.h"
+
 
 /* USER CODE END Includes */
 
@@ -156,9 +155,9 @@ void Error_Handler(void);
 #define SYSTEM_ACTIVATED 0x01
 
 void RX_Receive(void);
-#define LORA_PORT GPIOG
-#define LORA_CS GPIO_ODR_OD11
+//#define LORA_CS GPIO_ODR_OD11
 #define LORA_DIO0 GPIO_ODR_OD7 //DIO0 GPIO
+
 
 
 

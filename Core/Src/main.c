@@ -43,8 +43,6 @@
 TIM_HandleTypeDef htim6;
 I2C_HandleTypeDef hi2c2;
 
-SPI_HandleTypeDef hspi5;
-SPI_HandleTypeDef hspi1;
 /* USER CODE BEGIN PV */
 
 //These are here instead of main.h as I don't wanna go into different documents to remember definitions
@@ -126,8 +124,6 @@ static const uint16_t ADC_CH4 = 0b0001100000000000;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C2_Init(void);
-static void MX_SPI5_Init(void);
-static void MX_SPI1_Init(void);
 //static void MX_TIM6_Init(void); -- NEED TO IMPLEMENT LORA PACKET TIMELOUT
 /* USER CODE BEGIN PFP */
 
@@ -149,8 +145,7 @@ static void MX_SPI1_Init(void);
 // static MCP96RL00_EMX_1 thermocouple_3;
 // static MCP96RL00_EMX_1 thermocouple_4;
  //SPI
- static ADC124S021 LoadCells;
- static ADC124S021 Transducers;
+
 
 
  //interrupt driven GPIO
@@ -218,6 +213,7 @@ static void MX_SPI1_Init(void);
 
 
  static GPIO RF_SW;
+ GPIO LORA_CS_GPIO;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -300,11 +296,6 @@ int main(void)
   /* USER CODE BEGIN Init */
 
 
-//if deadman switches are activated (or set)! -> TRIGGER PURGE
-//is ISO switches are selected -> figure out what to do from there!
-//if Other switch
-//If local control switch is asserted, then the inputs from the other switches SHALL matter
-	//If not remote control will take priority!
 
 
   /* USER CODE END Init */
@@ -318,17 +309,12 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
-	delay_software_ms(100); //important!!
+	HAL_Delay(100); //important!!
 
 	MX_GPIO_Init();
 	MX_I2C2_Init();
-//	MX_SPI5_Init();
-	MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-	//configureSPIBus1();
-	configureSPIBus6(); //SPI6
-	// configureSPIBus4();
-	//configureI2CBus1();
+
 
 //*******************************NORMAL GPIO INITALISATIONS*************************************************************
 
@@ -422,7 +408,10 @@ int main(void)
 
 	 GPIO_init(&RF_SW, GPIOG, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x0A);
 
+	 GPIO_init(&LORA_CS_GPIO, GPIOG, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x0B);
+
 	 RF_SW.port->ODR |= (GPIO_ODR_OD10);
+	 LORA_CS_GPIO.port->ODR |= (LORA_CS);
 
 	 //Ensure CH1-4 is turned off, as its currently unused
 	 CH1_ARM.port->ODR &= ~(CH1_Arm);
@@ -440,17 +429,6 @@ int main(void)
 	 //*******************************NOTE - Updated to use HAL libraries, and funcions within main.c*************************************************************
 	 // Done by JC - 07/04/2025, for first legacy launch
 
-	//ADT75ARMZ_init(&temp_sensor, I2C2, GPIOF,TEMPERATURE_SENSOR, 0x48);
-
-	//conversion rate is 63ms for thermocouple conversion. Conversion will be 63ms + (time it takes to do 4 I2C read operations)
-	//MCP96RL00_EMX_1_init(&thermocouple_1,I2C2, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, THERMOCOUPLE_1_ADDR);
-	//MCP96RL00_EMX_1_init(&thermocouple_2,I2C2, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, THERMOCOUPLE_2_ADDR);
-	//MCP96RL00_EMX_1_init(&thermocouple_3,I2C2, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, THERMOCOUPLE_3_ADDR);
-	//MCP96RL00_EMX_1_init(&thermocouple_4,I2C2, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, THERMOCOUPLE_4_ADDR);
-
-	//ADC124S021_init(&LoadCells,Load_Cell, LOAD_CELL_PORT, LOAD_CELL_CS);
-	//ADC124S021_init(&Transducers,Transducer, TRANSDUCER_PORT, TRANSDUCER_CS);
-
 	//configure_TIM1(); //start LoRa timer -> as late as possible!
 
 
@@ -460,38 +438,9 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-/*	@Param:Error
- * 	B15: Ignition Failure
- * 	B14: Relay Error #3
- * 	B13: Relay Error #2
- *  B12: Relay Error #1
- *  B11: Thermocouple Error #4
- *  B10: Thermocouple Error #3
- *  B9: Thermocouple Error #2
- *  B8: Thermocouple Error #1
- *  B7: Load Cell Error #4
- *  B6: Load Cell Error #3
- *  B5: Load Cell Error #2
- *  B4: Load Cell Error #1
- *  B3: Transducer Error #4
- *  B2: Transducer Error #3
- *  B1: Transducer Error #2
- *  B0: Transducer Error #1
- *
- *  @Param: State
- *  B7: Manual Purge
- *  B6: O2 Fill Activate
- *  B5: Selector Switch Neutral Position
- *  B4: N20 Fill Activate
- *  B3: Ignition Fire
- *  B2: Ignition Selected
- *  B1: Gas Filled
- *  B0: System Activate -> nothing can be done unless this bit is set
- */
 
 
 
-	//INT_pin_input = (GPIOD->IDR & GPIO_IDR_IDR_7); //should be a non 0 value here!
 
 	//Make sure interrupts are configured BEFORE interupts
 	GPIO_init(&LoRa_Rx_int, GPIOD, GPIO_MODER_INPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x07);
@@ -606,7 +555,7 @@ while (1) {
 		spi_buf[0] = 0;
 		spi_buf[1] = 0;
 		HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_RESET);
-		ret = HAL_SPI_TransmitReceive(&hspi5,(uint8_t *)&ADC_CH1,  (uint8_t *)spi_buf, 1, 100);
+		//ret = HAL_SPI_TransmitReceive(&hspi5,(uint8_t *)&ADC_CH1,  (uint8_t *)spi_buf, 1, 100);
 		HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
 		if (ret != HAL_OK){
 			TRANSDUCER_1.comms_ok = false;
@@ -625,21 +574,21 @@ while (1) {
 			TRANSDUCER_1.raw_data[1] = spi_buf[1];
 
 			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_RESET);
-			HAL_SPI_TransmitReceive(&hspi5, (uint8_t *)&ADC_CH2, (uint8_t *)spi_buf, 1, 100);
+			//HAL_SPI_TransmitReceive(&hspi5, (uint8_t *)&ADC_CH2, (uint8_t *)spi_buf, 1, 100);
 			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
 
 			TRANSDUCER_2.raw_data[0] = spi_buf[0];
 			TRANSDUCER_2.raw_data[1] = spi_buf[1];
 
 			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_RESET);
-			HAL_SPI_TransmitReceive(&hspi5, (uint8_t *)&ADC_CH3, (uint8_t *)spi_buf, 1, 100);
+			//HAL_SPI_TransmitReceive(&hspi5, (uint8_t *)&ADC_CH3, (uint8_t *)spi_buf, 1, 100);
 			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
 
 			TRANSDUCER_3.raw_data[0] = spi_buf[0];
 			TRANSDUCER_3.raw_data[1] = spi_buf[1];
 
 			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_RESET);
-			HAL_SPI_TransmitReceive(&hspi5, (uint8_t *)&ADC_CH4, (uint8_t *)spi_buf, 1, 100);
+			//HAL_SPI_TransmitReceive(&hspi5, (uint8_t *)&ADC_CH4, (uint8_t *)spi_buf, 1, 100);
 			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
 
 			TRANSDUCER_4.raw_data[0] = spi_buf[0];
@@ -691,7 +640,7 @@ while (1) {
 		spi_buf[0] = 0;
 		spi_buf[1] = 0;
 		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
-		ret = HAL_SPI_TransmitReceive(&hspi1,(uint8_t *)&ADC_CH1,  (uint8_t *)spi_buf, 1, 100);
+		//ret = HAL_SPI_TransmitReceive(&hspi1,(uint8_t *)&ADC_CH1,  (uint8_t *)spi_buf, 1, 100);
 		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
 		if (ret != HAL_OK){
 			LOADCELL_1.comms_ok = false;
@@ -710,21 +659,21 @@ while (1) {
 			LOADCELL_1.raw_data[1] = spi_buf[1];
 
 			HAL_GPIO_WritePin(GPIOG, GPIO_PIN_4, GPIO_PIN_RESET);
-			ret = HAL_SPI_TransmitReceive(&hspi1,(uint8_t *)&ADC_CH2,  (uint8_t *)spi_buf, 1, 100);
+			//ret = HAL_SPI_TransmitReceive(&hspi1,(uint8_t *)&ADC_CH2,  (uint8_t *)spi_buf, 1, 100);
 			HAL_GPIO_WritePin(GPIOG, GPIO_PIN_4, GPIO_PIN_SET);
 
 			LOADCELL_2.raw_data[0] = spi_buf[0];
 			LOADCELL_2.raw_data[1] = spi_buf[1];
 
 			HAL_GPIO_WritePin(GPIOG, GPIO_PIN_4, GPIO_PIN_RESET);
-			ret = HAL_SPI_TransmitReceive(&hspi1,(uint8_t *)&ADC_CH3,  (uint8_t *)spi_buf, 1, 100);
+			//ret = HAL_SPI_TransmitReceive(&hspi1,(uint8_t *)&ADC_CH3,  (uint8_t *)spi_buf, 1, 100);
 			HAL_GPIO_WritePin(GPIOG, GPIO_PIN_4, GPIO_PIN_SET);
 
 			LOADCELL_3.raw_data[0] = spi_buf[0];
 			LOADCELL_3.raw_data[1] = spi_buf[1];
 
 			HAL_GPIO_WritePin(GPIOG, GPIO_PIN_4, GPIO_PIN_RESET);
-			ret = HAL_SPI_TransmitReceive(&hspi1,(uint8_t *)&ADC_CH4,  (uint8_t *)spi_buf, 1, 100);
+			//ret = HAL_SPI_TransmitReceive(&hspi1,(uint8_t *)&ADC_CH4,  (uint8_t *)spi_buf, 1, 100);
 			HAL_GPIO_WritePin(GPIOG, GPIO_PIN_4, GPIO_PIN_SET);
 
 			LOADCELL_4.raw_data[0] = spi_buf[0];
@@ -753,10 +702,10 @@ while (1) {
 
 		//Check Loadcell weights, if too low, trigger error flag
 		//Error Flags specific to loadcell
-		if(LoadCells.Converted_Value_LoadCell[0] <min_weight_error_mode){error |=(0x01<<7);}
-		else if(LoadCells.Converted_Value_LoadCell[1] <min_weight_error_mode){error |=(0x01<<6);}
-		else if(LoadCells.Converted_Value_LoadCell[2] <min_weight_error_mode){error |=(0x01<<5);}
-		else if(LoadCells.Converted_Value_LoadCell[3] <min_weight_error_mode){error |=(0x01<<4);}
+		if(LOADCELL_1.read_value_weight <min_weight_error_mode){error |=(0x01<<7);}
+		else if(LOADCELL_2.read_value_weight <min_weight_error_mode){error |=(0x01<<6);}
+		else if(LOADCELL_3.read_value_weight <min_weight_error_mode){error |=(0x01<<5);}
+		else if(LOADCELL_4.read_value_weight <min_weight_error_mode){error |=(0x01<<4);}
 		//Weights are A-OK, so carry on without doing anything
 		else{}
 
@@ -1372,40 +1321,40 @@ while (1) {
 		//Ignition1_OP.port->ODR |= IGNITION1_OP;
 		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
 		Ignition2_OP.port->ODR |= (IGNITION2_OP);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
+		HAL_Delay(30); //provide a delay to ensure fire state has been activated for a long enough time
 		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
 		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
+		HAL_Delay(30); //provide a delay to ensure fire state has been activated for a long enough time
 		Ignition2_OP.port->ODR |= (IGNITION2_OP);
 		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
+		HAL_Delay(500); //provide a delay to ensure fire state has been activated for a long enough time
 		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
 		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
+		HAL_Delay(30); //provide a delay to ensure fire state has been activated for a long enough time
 		Ignition2_OP.port->ODR |= (IGNITION2_OP);
 		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
+		HAL_Delay(500); //provide a delay to ensure fire state has been activated for a long enough time
 		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
 		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
+		HAL_Delay(30); //provide a delay to ensure fire state has been activated for a long enough time
 		Ignition2_OP.port->ODR |= (IGNITION2_OP);
 		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
+		HAL_Delay(500); //provide a delay to ensure fire state has been activated for a long enough time
 		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
 		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
+		HAL_Delay(30); //provide a delay to ensure fire state has been activated for a long enough time
 		Ignition2_OP.port->ODR |= (IGNITION2_OP);
 		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
+		HAL_Delay(500); //provide a delay to ensure fire state has been activated for a long enough time
 		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
 		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
+		HAL_Delay(30); //provide a delay to ensure fire state has been activated for a long enough time
 
 		//Disarm Ignition circuit
 		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
 		Ignition2_OP.port->ODR |= (IGNITION2_OP);
 
-		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
+		HAL_Delay(500); //provide a delay to ensure fire state has been activated for a long enough time
 
 		//Manually removes "ignition" state bit from last read LoRa packet info
 		state &= ~(0x02 <<2); //this if more so for remote control 0bxxxx11xx become 0
@@ -1475,79 +1424,6 @@ void SystemClock_Config(void)
 }
 
 
-static void MX_SPI1_Init(void)
-{
-
-  /* USER CODE BEGIN SPI1_Init 0 */
-
-  /* USER CODE END SPI1_Init 0 */
-
-  /* USER CODE BEGIN SPI1_Init 1 */
-
-  /* USER CODE END SPI1_Init 1 */
-  /* SPI1 parameter configuration*/
-  hspi1.Instance = SPI1;
-  hspi1.Init.Mode = SPI_MODE_MASTER;
-  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi1.Init.DataSize = SPI_DATASIZE_16BIT;
-  hspi1.Init.CLKPolarity = SPI_POLARITY_HIGH;
-  hspi1.Init.CLKPhase = SPI_PHASE_2EDGE;
-  hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
-  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi1.Init.CRCPolynomial = 10;
-  if (HAL_SPI_Init(&hspi1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN SPI1_Init 2 */
-
-  /* USER CODE END SPI1_Init 2 */
-
-}
-
-
-
-static void MX_SPI5_Init(void)
-{
-
-  /* USER CODE BEGIN SPI5_Init 0 */
-
-  /* USER CODE END SPI5_Init 0 */
-
-  /* USER CODE BEGIN SPI5_Init 1 */
-
-  /* USER CODE END SPI5_Init 1 */
-  /* SPI5 parameter configuration*/
-  hspi5.Instance = SPI5;
-  hspi5.Init.Mode = SPI_MODE_MASTER;
-  hspi5.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi5.Init.DataSize = SPI_DATASIZE_16BIT;
-  hspi5.Init.CLKPolarity = SPI_POLARITY_HIGH;
-  hspi5.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi5.Init.NSS = SPI_NSS_SOFT;
-  hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
-  hspi5.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi5.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi5.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi5.Init.CRCPolynomial = 10;
-  if (HAL_SPI_Init(&hspi5) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN SPI5_Init 2 */
-
-  /* USER CODE END SPI5_Init 2 */
-
-}
-
-
-
-
-
-
 /**
   * @brief GPIO Initialization Function
   * @param None
@@ -1568,37 +1444,6 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOG_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOG, GPIO_PIN_4, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : PF6 */
-  GPIO_InitStruct.Pin = GPIO_PIN_6;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PG4 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
-
-
-  /*Configure GPIO pin : PA2 */
-  GPIO_InitStruct.Pin = GPIO_PIN_2;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
-
-  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 
@@ -1696,7 +1541,7 @@ void TIM1_UP_TIM10_IRQHandler(void)
 
 void EXTI1_IRQHandler(void)
 {
-	delay_software_us(200); //200us delay to prevent debouncing
+	HAL_Delay(2); //200us delay to prevent debouncing
    	if(EXTI->PR & EXTI_PR_PR1) //if the rising edge has been detected by pin 2
    	{
    		EXTI->PR &= ~EXTI_PR_PR1; //resets the flag
@@ -1752,7 +1597,7 @@ void RX_Receive(void)
 	__NVIC_DisableIRQ(EXTI9_5_IRQn); //uncomment after testing!!
 	//__NVIC_DisableIRQ(TIM1_UP_TIM10_IRQn); //Disable IQR for LoRa Hardware Timer
 
-	delay_software_ms(100); //important!!
+	HAL_Delay(100); //important!!
 
 
 	bool RX_result = SX1272_readReceive(&lora, pointerdata, LORA_MSG_LENGTH);

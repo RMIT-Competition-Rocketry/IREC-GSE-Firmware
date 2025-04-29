@@ -15,9 +15,10 @@
  * @todo Implement adjustable packet size                                          *
  * @{                                                                              *
  ***********************************************************************************/
-#include "sensors.h"
+
 #include "lora.h"
 #include "stm32f4xx_hal.h"
+
 
 
 
@@ -46,7 +47,15 @@ void SX1272_init(
     SX1272_SpreadingFactor sf,
     SX1272_CodingRate cr
 ) {
-  SPI_init(&lora->base, COMM_LORA, SPI6, MODE8, port, cs);
+
+	SPI_Config spiLoraConfig = SPI_CONFIG_DEFAULT; // Using default settings as base
+	spiLoraConfig.CPHA       = SPI_CPHA_FIRST;     // Begin on first clock edge
+	spiLoraConfig.CPOL       = SPI_CPOL0;          // Idle clock low
+	static SPI_t base;
+	base = SPI_init(SPI6, &spiLoraConfig);
+	lora->base = &base;
+
+  //SPI_init(&lora->base, COMM_LORA, SPI6, MODE8, port, cs);
   lora->standby      = SX1272_standby;
   lora->enableBoost  = SX1272_enableBoost;
   lora->transmit     = SX1272_transmit;
@@ -211,116 +220,6 @@ LoRa_Packet LoRa_PayloadData(
   return msg;
 }
 
-
-LoRa_Packet LoRa_GSEData_1(
-		uint8_t id,
-		ADC124S021 *trans,
-		MCP96RL00_EMX_1 *thermo1,
-		MCP96RL00_EMX_1 *thermo2,
-		MCP96RL00_EMX_1 *thermo3,
-		MCP96RL00_EMX_1 *thermo4,
-		uint16_t error_code)
-{
-		LoRa_Packet msg;
-
-		union{
-			float *f;
-			uint8_t b[4];
-		}TR1;
-		TR1.f = &trans->Converted_Value_Transducer[0];
-
-
-		union{
-			float *f;
-			uint8_t b[4];
-		}TR2;
-		TR2.f = &trans->Converted_Value_Transducer[1];
-
-		union{
-			float *f;
-			uint8_t b[4];
-		}TR3;
-		TR3.f = &trans->Converted_Value_Transducer[2];
-
-		union{
-			float *f;
-			uint8_t b[4];
-		}TC1;
-		TC1.f = &thermo1->temperature;
-
-		union{
-				float *f;
-				uint8_t b[4];
-			}TC2;
-			TC2.f = &thermo2->temperature;
-
-			union{
-				float *f;
-				uint8_t b[4];
-			}TC3;
-			TC3.f = &thermo3->temperature;
-
-			union{
-				float *f;
-				uint8_t b[4];
-			}TC4;
-			TC4.f = &thermo4->temperature;
-
-		uint8_t idx = 0;
-		msg.id = id;
-		memcpy(&msg.data[idx +=sizeof(float)], TR1.b, sizeof(float)); //sizeof(b[4]) == sizeof(float)
-		memcpy(&msg.data[idx +=sizeof(float)], TR2.b, sizeof(float));
-		memcpy(&msg.data[idx +=sizeof(float)], TR3.b, sizeof(float));
-		memcpy(&msg.data[idx +=sizeof(float)], TC1.b, sizeof(float));
-		memcpy(&msg.data[idx +=sizeof(float)], TC2.b, sizeof(float));
-		memcpy(&msg.data[idx +=sizeof(float)], TC3.b, sizeof(float));
-		memcpy(&msg.data[idx +=sizeof(float)], TC4.b, sizeof(float));
-		memcpy(&msg.data[idx +=sizeof(uint16_t)], error_code, sizeof(uint16_t));
-
-		return msg;
-}
-
-
-
-LoRa_Packet LoRa_GSEData_2	(
-		uint8_t id,
-		ADC124S021 *loadcell,
-		ADT75ARMZ *temp_sense,
-		uint16_t error_code
-		)
-{
-	LoRa_Packet msg;
-
-	uint8_t idx = 0;
-
-	union{
-		float *f;
-		uint8_t b[4];
-	}LC1;
-	LC1.f = &loadcell->Converted_Value_LoadCell;
-
-	union{
-		float *f;
-		uint8_t b[4];
-	}LC2;
-	LC2.f = &loadcell->Converted_Value_LoadCell;
-
-	union{
-		float *f;
-		uint8_t b[4];
-	}TS;
-	TS.f = &temp_sense->temperature;
-
-
-		msg.id = id;
-		memcpy(msg.data[idx += sizeof(float)], LC1.b, sizeof(float));
-		memcpy(msg.data[idx += sizeof(float)], LC2.b, sizeof(float));
-		memcpy(msg.data[idx += sizeof(float)], TS.b, sizeof(float));
-		memcpy(msg.data[idx += sizeof(uint16_t)], &error_code, sizeof(uint16_t));
-
-		return msg;
-
-}
 
 LoRa_Packet Dummy_Transmit()
 {
@@ -543,37 +442,39 @@ void SX1272_clearIRQ(SX1272_t *lora, uint8_t flags) {
 /*************************************** INTERFACE METHODS ****************************************/
 
 void SX1272_writeRegister(SX1272_t *lora, uint8_t address, uint8_t data) {
-  SPI spi = lora->base;
+  SPI_t *spi   = lora->base;
 
-  //Pull CS low
-  spi.port->ODR &= ~spi.cs;
+  //Pull CS Low
+  LORA_CS_GPIO.port->ODR &= ~(LORA_CS);
 
-  //Send write data and address
+  // Send write data and address
   uint8_t payload = address | 0x80; // Load payload with address and write command
-  spi.transmit(&spi, payload);      // Transmit payload
-  spi.transmit(&spi, data);         // Transmit write data
+  spi->transmit(spi, payload);      // Transmit payload
+  spi->transmit(spi, data);         // Transmit write data
 
-  // Set CS high
-  spi.port->ODR |= spi.cs;
+  //Set CS High
+  LORA_CS_GPIO.port->ODR |= (LORA_CS);
+
 }
 
 uint8_t SX1272_readRegister(SX1272_t *lora, uint8_t address) {
   uint8_t response = 0;
-  SPI spi         = lora->base;
+  SPI_t *spi       = lora->base;
 
-  // Pull CS low
-  spi.port->ODR &= ~spi.cs;
+  //Pull CS Low
+   LORA_CS_GPIO.port->ODR &= ~(LORA_CS);
 
   // Send write data and address
   uint8_t payload = address & 0x7F;              // Load payload with address and read command
-  response        = spi.transmit(&spi, payload); // Transmit payload
-  response        = spi.transmit(&spi, 0xFF);    // Transmit dummy data and reasd response
+  response        = spi->transmit(spi, payload); // Transmit payload
+  response        = spi->transmit(spi, 0xFF);    // Transmit dummy data and reasd response
 
-  // Set CS high
-  spi.port->ODR |= spi.cs;
+  //Set CS High
+  LORA_CS_GPIO.port->ODR |= (LORA_CS);
 
   return response;
 }
+
 
 
 
