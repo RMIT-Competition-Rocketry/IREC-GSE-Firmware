@@ -34,8 +34,9 @@ extern "C" {
 #include "driver.h"
 #include "gpio.h"
 #include "I2C.h"
-#include "spi.h"
+
 #include "lora.h"
+#include "spi.h"
 
 
 /* USER CODE END Includes */

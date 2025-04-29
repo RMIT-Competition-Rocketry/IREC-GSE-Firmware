@@ -51,6 +51,7 @@ void SX1272_init(
 	SPI_Config spiLoraConfig = SPI_CONFIG_DEFAULT; // Using default settings as base
 	spiLoraConfig.CPHA       = SPI_CPHA_FIRST;     // Begin on first clock edge
 	spiLoraConfig.CPOL       = SPI_CPOL0;          // Idle clock low
+	spiLoraConfig.BR 		= SPI_BR_PCLK16;
 	static SPI_t base;
 	base = SPI_init(SPI6, &spiLoraConfig);
 	lora->base = &base;

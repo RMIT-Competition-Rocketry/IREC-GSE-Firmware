@@ -219,6 +219,16 @@ static void MX_I2C2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+ SPI_Config ADC_SPICONFIG = SPI_CONFIG_DEFAULT; // Using default settings as base
+ 	 ADC_SPICONFIG.CPHA       = SPI_CPHA_FIRST;     // Begin on first clock edge
+ 	 ADC_SPICONFIG.CPOL       = SPI_CPOL0;          // Idle clock low
+ 	 ADC_SPICONFIG.BR 		   = SPI_BR_PCLK16;
+
+
+
+
+
+
 
 //HAL LIB I2C COMMS SETUP - Added JC 07-04-2025
  typedef struct{
@@ -314,6 +324,8 @@ int main(void)
 	MX_GPIO_Init();
 	MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
+
+	configureSPIBus6();
 
 
 //*******************************NORMAL GPIO INITALISATIONS*************************************************************
@@ -1593,11 +1605,11 @@ void EXTI9_5_IRQHandler(void)
 
 void RX_Receive(void)
 {
-	__disable_irq(); //uncomment after testing!!
+	//__disable_irq(); //uncomment after testing!!
 	__NVIC_DisableIRQ(EXTI9_5_IRQn); //uncomment after testing!!
 	//__NVIC_DisableIRQ(TIM1_UP_TIM10_IRQn); //Disable IQR for LoRa Hardware Timer
 
-	HAL_Delay(100); //important!!
+	HAL_Delay(1000); //important!!
 
 
 	bool RX_result = SX1272_readReceive(&lora, pointerdata, LORA_MSG_LENGTH);

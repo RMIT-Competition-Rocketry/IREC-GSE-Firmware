@@ -82,6 +82,31 @@ void configureSPIBus1(void) //for ADC transducers
 }
 
 
+void configureSPIBus5(void) // For ADC or external SPI device via SPI5
+{
+    // Config PF7 (Clock), PF8 (MISO), PF9 (MOSI) for alternate function mode
+    GPIOF->MODER &= ~(GPIO_MODER_MODE7_Msk | GPIO_MODER_MODE8_Msk | GPIO_MODER_MODE9_Msk);
+    GPIOF->MODER |= (0x2 << GPIO_MODER_MODE7_Pos) | (0x2 << GPIO_MODER_MODE8_Pos) | (0x2 << GPIO_MODER_MODE9_Pos);
+
+    // PUPDs
+    GPIOF->PUPDR &= ~(GPIO_PUPDR_PUPD7_Msk | GPIO_PUPDR_PUPD8_Msk | GPIO_PUPDR_PUPD9_Msk);
+    GPIOF->PUPDR |= (0x1 << GPIO_PUPDR_PUPD7_Pos) | (0x1 << GPIO_PUPDR_PUPD8_Pos) | (0x1 << GPIO_PUPDR_PUPD9_Pos);
+
+    // Push Pull
+    GPIOF->OTYPER &= ~(GPIO_OTYPER_OT7 | GPIO_OTYPER_OT8 | GPIO_OTYPER_OT9);
+
+    // Speed - fast
+    GPIOF->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED7_Msk | GPIO_OSPEEDR_OSPEED8_Msk | GPIO_OSPEEDR_OSPEED9_Msk);
+    GPIOF->OSPEEDR |= (0x3 << GPIO_OSPEEDR_OSPEED7_Pos) | (0x3 << GPIO_OSPEEDR_OSPEED8_Pos) | (0x3 << GPIO_OSPEEDR_OSPEED9_Pos);
+
+    // Alternate Function 5 for SPI5 on PF7, PF8, PF9
+    GPIOF->AFR[0] &= ~(0xF << (4 * 7));                      // PF7 (SCK)
+    GPIOF->AFR[1] &= ~((0xF << (4 * (8 - 8))) | (0xF << (4 * (9 - 8)))); // PF8, PF9
+    GPIOF->AFR[0] |= (5 << (4 * 7));
+    GPIOF->AFR[1] |= (5 << (4 * (8 - 8))) | (5 << (4 * (9 - 8)));
+}
+
+
 void configureSPIBus6(void)// 	//for both additional 5V channels and LoRa
 {
 	GPIOG->MODER &= ~(GPIO_MODER_MODE12_Msk | GPIO_MODER_MODE13_Msk | GPIO_MODER_MODE14_Msk);
