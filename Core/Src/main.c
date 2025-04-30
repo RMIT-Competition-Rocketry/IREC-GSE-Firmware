@@ -214,15 +214,15 @@ static void MX_I2C2_Init(void);
 
  static GPIO RF_SW;
  GPIO LORA_CS_GPIO;
+
+ static GPIO LOADCELL_CS;
+ static GPIO ADDITIONAL_ADC_CS;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
- SPI_Config ADC_SPICONFIG = SPI_CONFIG_DEFAULT; // Using default settings as base
- 	 ADC_SPICONFIG.CPHA       = SPI_CPHA_FIRST;     // Begin on first clock edge
- 	 ADC_SPICONFIG.CPOL       = SPI_CPOL0;          // Idle clock low
- 	 ADC_SPICONFIG.BR 		   = SPI_BR_PCLK16;
+
 
 
 
@@ -248,14 +248,14 @@ static void MX_I2C2_Init(void);
 
  typedef struct{
 	 bool comms_ok;
-	 uint8_t raw_data[2];
+	 uint16_t raw_data;
 	 float read_value_voltage;
 	 float read_value_bar;
  }TRANSDUCER_PRESSURE;
 
  typedef struct{
 	 bool comms_ok;
-	 uint8_t raw_data[2];
+	 uint16_t raw_data;
 	 float read_value_voltage;
 	 float read_value_weight;
  }LOADCELL_WEIGHT;
@@ -268,15 +268,15 @@ static void MX_I2C2_Init(void);
  TEMP_SENSE THERMOCOUPLE_4 = {.ADDR = 0b11000110, .resolution = 0x12, .thermocouple_type = 'J'};
 
 
- TRANSDUCER_PRESSURE TRANSDUCER_1 = {.comms_ok = false, .raw_data[0] = 0, .read_value_voltage = 0, .read_value_bar = 0};
- TRANSDUCER_PRESSURE TRANSDUCER_2 = {.comms_ok = false, .raw_data[0] = 0, .read_value_voltage = 0, .read_value_bar = 0};
- TRANSDUCER_PRESSURE TRANSDUCER_3 = {.comms_ok = false, .raw_data[0] = 0, .read_value_voltage = 0, .read_value_bar = 0};
- TRANSDUCER_PRESSURE TRANSDUCER_4 = {.comms_ok = false, .raw_data[0] = 0, .read_value_voltage = 0, .read_value_bar = 0};
+ TRANSDUCER_PRESSURE TRANSDUCER_1 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_bar = 0};
+ TRANSDUCER_PRESSURE TRANSDUCER_2 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_bar = 0};
+ TRANSDUCER_PRESSURE TRANSDUCER_3 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_bar = 0};
+ TRANSDUCER_PRESSURE TRANSDUCER_4 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_bar = 0};
 
- LOADCELL_WEIGHT LOADCELL_1 = {.comms_ok = false, .raw_data[0] = 0, .read_value_voltage = 0, .read_value_weight = 0};
- LOADCELL_WEIGHT LOADCELL_2 = {.comms_ok = false, .raw_data[0] = 0, .read_value_voltage = 0, .read_value_weight = 0};
- LOADCELL_WEIGHT LOADCELL_3 = {.comms_ok = false, .raw_data[0] = 0, .read_value_voltage = 0, .read_value_weight = 0};
- LOADCELL_WEIGHT LOADCELL_4 = {.comms_ok = false, .raw_data[0] = 0, .read_value_voltage = 0, .read_value_weight = 0};
+ LOADCELL_WEIGHT LOADCELL_1 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_weight = 0};
+ LOADCELL_WEIGHT LOADCELL_2 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_weight = 0};
+ LOADCELL_WEIGHT LOADCELL_3 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_weight = 0};
+ LOADCELL_WEIGHT LOADCELL_4 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_weight = 0};
 
  i2c_comms_result config_thermocouple(TEMP_SENSE *temp_sense);
  i2c_comms_result get_temp(TEMP_SENSE *temp_sense);
@@ -326,6 +326,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
 	configureSPIBus6();
+	configureSPIBus1();
+	configureSPIBus5();
 
 	GPIO_init(&LOADCELL_CS, GPIOA, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x02);
 	LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
@@ -344,34 +346,12 @@ int main(void)
 	 ADDTIONAL_ADC = SPI_init(SPI5, &ADC_SPICONFIG);
 	 LOADCELL_ADC = SPI_init(SPI1, &ADC_SPICONFIG);
 
-	 uint16_t SPI_rec = 0x0000;
-	 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
-	 SPI_rec = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH1);
-	 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
-	 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
-	 SPI_rec = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH1);
-	 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
 
-	 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
-	 SPI_rec = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH2);
-	 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
-	 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
-	 SPI_rec = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH2);
-	 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
 
-	 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
-	 SPI_rec = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH3);
-	 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
-	 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
-	 SPI_rec = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH3);
-	 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
 
-	 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
-	 SPI_rec = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH4);
-	 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
-	 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
-	 SPI_rec = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH4);
-	 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
+
+
+
 
 //*******************************NORMAL GPIO INITALISATIONS*************************************************************
 
@@ -606,63 +586,47 @@ while (1) {
 
 //Get Pressure Readings from Transducers
 
-		//Done with HAL libs atm - JC 29/04/2025
-
-		uint8_t spi_buf[2];
-		spi_buf[0] = 0;
-		spi_buf[1] = 0;
-		HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_RESET);
-		//ret = HAL_SPI_TransmitReceive(&hspi5,(uint8_t *)&ADC_CH1,  (uint8_t *)spi_buf, 1, 100);
-		HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
-		if (ret != HAL_OK){
-			TRANSDUCER_1.comms_ok = false;
-			TRANSDUCER_2.comms_ok = false;
-			TRANSDUCER_3.comms_ok = false;
-			TRANSDUCER_4.comms_ok = false;
-		}
-		else {
-			TRANSDUCER_1.comms_ok = true;
-			TRANSDUCER_2.comms_ok = true;
-			TRANSDUCER_3.comms_ok = true;
-			TRANSDUCER_4.comms_ok = true;
+		//Done with Matt's SPI lib - JC 30/04/2025
 
 
-			TRANSDUCER_1.raw_data[0] = spi_buf[0];
-			TRANSDUCER_1.raw_data[1] = spi_buf[1];
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_1.raw_data = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH1);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_1.raw_data = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH1);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
 
-			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_RESET);
-			//HAL_SPI_TransmitReceive(&hspi5, (uint8_t *)&ADC_CH2, (uint8_t *)spi_buf, 1, 100);
-			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_2.raw_data = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH2);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_2.raw_data = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH2);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
 
-			TRANSDUCER_2.raw_data[0] = spi_buf[0];
-			TRANSDUCER_2.raw_data[1] = spi_buf[1];
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_3.raw_data = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH3);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_3.raw_data = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH3);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
 
-			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_RESET);
-			//HAL_SPI_TransmitReceive(&hspi5, (uint8_t *)&ADC_CH3, (uint8_t *)spi_buf, 1, 100);
-			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
-
-			TRANSDUCER_3.raw_data[0] = spi_buf[0];
-			TRANSDUCER_3.raw_data[1] = spi_buf[1];
-
-			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_RESET);
-			//HAL_SPI_TransmitReceive(&hspi5, (uint8_t *)&ADC_CH4, (uint8_t *)spi_buf, 1, 100);
-			HAL_GPIO_WritePin(GPIOF, GPIO_PIN_6, GPIO_PIN_SET);
-
-			TRANSDUCER_4.raw_data[0] = spi_buf[0];
-			TRANSDUCER_4.raw_data[1] = spi_buf[1];
-
-		}
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_4.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH4);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_4.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH4);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
 
 		//Translate 12bit value into relative voltage (given Vref is 5V)
 
-		TRANSDUCER_1.read_value_voltage = ((float)(TRANSDUCER_1.raw_data[1] << 8 |  TRANSDUCER_1.raw_data[0] )/ 4095) * 5 + 0.00394; //Offset as per dataset found
-		TRANSDUCER_1.read_value_voltage = TRANSDUCER_1.read_value_voltage *2; //Multiplied by 2 cos, idk, first time through correct sample is taken, every sample after that is half what it should be - find the problem? No, find a workaround? absolutely
-		TRANSDUCER_2.read_value_voltage = ((float)(TRANSDUCER_2.raw_data[1] << 8 |  TRANSDUCER_2.raw_data[0] )/ 4095) * 5 + 0.00394;
-		TRANSDUCER_2.read_value_voltage = TRANSDUCER_2.read_value_voltage *2;
-		TRANSDUCER_3.read_value_voltage = ((float)(TRANSDUCER_3.raw_data[1] << 8 |  TRANSDUCER_3.raw_data[0] )/ 4095) * 5 + 0.00394;
-		TRANSDUCER_3.read_value_voltage = TRANSDUCER_3.read_value_voltage *2;
-		TRANSDUCER_4.read_value_voltage = ((float)(TRANSDUCER_4.raw_data[1] << 8 |  TRANSDUCER_4.raw_data[0] )/ 4095) * 5 + 0.00394;
-		TRANSDUCER_4.read_value_voltage = TRANSDUCER_4.read_value_voltage *2;
+		TRANSDUCER_1.read_value_voltage = ((float)(TRANSDUCER_1.raw_data)/ 4095) * 5 + 0.00394; //Offset as per dataset found
+		//TRANSDUCER_1.read_value_voltage = TRANSDUCER_1.read_value_voltage *2; //Multiplied by 2 cos, idk, first time through correct sample is taken, every sample after that is half what it should be - find the problem? No, find a workaround? absolutely
+		TRANSDUCER_2.read_value_voltage = ((float)(TRANSDUCER_2.raw_data)/ 4095) * 5 + 0.00394;
+		//TRANSDUCER_2.read_value_voltage = TRANSDUCER_2.read_value_voltage *2;
+		TRANSDUCER_3.read_value_voltage = ((float)(TRANSDUCER_3.raw_data)/ 4095) * 5 + 0.00394;
+		//TRANSDUCER_3.read_value_voltage = TRANSDUCER_3.read_value_voltage *2;
+		TRANSDUCER_4.read_value_voltage = ((float)(TRANSDUCER_4.raw_data)/ 4095) * 5 + 0.00394;
+		//TRANSDUCER_4.read_value_voltage = TRANSDUCER_4.read_value_voltage *2;
 
 		TRANSDUCER_1.read_value_bar = TRANSDUCER_1.read_value_voltage * 60; //(voltage_read / 5) * 300 (bar) = pressure, 300/5 is 60, therefore (voltage_read) * 60 = pressure (for a 0-300bar range)
 		TRANSDUCER_2.read_value_bar = TRANSDUCER_2.read_value_voltage * 60;
@@ -674,76 +638,70 @@ while (1) {
 
 		//Check Transducer pressures, if pressures too high go directly to PURGE state
 		//Error flags are specifc per Transducer
-		if(TRANSDUCER_1.read_value_bar >=max_pressure_failure_mode){switch_case_state = 10; error |=(0x01<<7);}
-		else if(TRANSDUCER_2.read_value_bar >=max_pressure_failure_mode){switch_case_state = 10; error |=(0x01<<6); }
-		else if(TRANSDUCER_3.read_value_bar >=max_pressure_failure_mode){switch_case_state = 10; error |=(0x01<<5);}
-		else if(TRANSDUCER_4.read_value_bar >=max_pressure_failure_mode){switch_case_state = 10; error |=(0x01<<4);}
+
+		/*
+		if(TRANSDUCER_1.read_value_bar >=max_pressure_failure_mode){switch_case_state = 10;} // error |=(0x01<<7);}
+		else if(TRANSDUCER_2.read_value_bar >=max_pressure_failure_mode){switch_case_state = 10;} // error |=(0x01<<6); }
+		else if(TRANSDUCER_3.read_value_bar >=max_pressure_failure_mode){switch_case_state = 10;}// error |=(0x01<<5);}
+		else if(TRANSDUCER_4.read_value_bar >=max_pressure_failure_mode){switch_case_state = 10;}// error |=(0x01<<4);}
 		//If Error state but not direct to PURGE
 		else{
+			/*
 			if(TRANSDUCER_1.read_value_bar >=max_pressure_error_mode){error |=(0x01<<3);}
 			else if(TRANSDUCER_2.read_value_bar >=max_pressure_error_mode){error |=(0x01<<2);}
 			else if(TRANSDUCER_3.read_value_bar >=max_pressure_error_mode){error |=(0x01<<1);}
 			else if(TRANSDUCER_4.read_value_bar >=max_pressure_error_mode){error |=0x01;}
+
 		//Pressures are A-OK, so carry on without doing anything
 			else{} //make it so nothing happens here -> proceed
+
+
 		}
+		*/
+
 
 		//Check if SX1272 has recieved a packet, if not move on
 		if(triggerRX){RX_Receive();}else{__asm("NOP");}
 
 //Get Loadcell Readings
 
-		//Done with HALD libs atm - JC 29/04/2025
-		spi_buf[0] = 0;
-		spi_buf[1] = 0;
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET);
-		//ret = HAL_SPI_TransmitReceive(&hspi1,(uint8_t *)&ADC_CH1,  (uint8_t *)spi_buf, 1, 100);
-		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET);
-		if (ret != HAL_OK){
-			LOADCELL_1.comms_ok = false;
-			LOADCELL_2.comms_ok = false;
-			LOADCELL_3.comms_ok = false;
-			LOADCELL_4.comms_ok = false;
-		}
-		else {
-			LOADCELL_1.comms_ok = true;
-			LOADCELL_2.comms_ok = true;
-			LOADCELL_3.comms_ok = true;
-			LOADCELL_4.comms_ok = true;
+		//Done with Matt's SPI lib - JC 30/04/2025
 
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_1.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH1);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_1.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH1);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
 
-			LOADCELL_1.raw_data[0] = spi_buf[0];
-			LOADCELL_1.raw_data[1] = spi_buf[1];
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_2.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH2);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_2.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH2);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
 
-			HAL_GPIO_WritePin(GPIOG, GPIO_PIN_4, GPIO_PIN_RESET);
-			//ret = HAL_SPI_TransmitReceive(&hspi1,(uint8_t *)&ADC_CH2,  (uint8_t *)spi_buf, 1, 100);
-			HAL_GPIO_WritePin(GPIOG, GPIO_PIN_4, GPIO_PIN_SET);
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_3.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH3);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_3.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH3);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
 
-			LOADCELL_2.raw_data[0] = spi_buf[0];
-			LOADCELL_2.raw_data[1] = spi_buf[1];
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_4.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH4);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_4.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH4);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
 
-			HAL_GPIO_WritePin(GPIOG, GPIO_PIN_4, GPIO_PIN_RESET);
-			//ret = HAL_SPI_TransmitReceive(&hspi1,(uint8_t *)&ADC_CH3,  (uint8_t *)spi_buf, 1, 100);
-			HAL_GPIO_WritePin(GPIOG, GPIO_PIN_4, GPIO_PIN_SET);
-
-			LOADCELL_3.raw_data[0] = spi_buf[0];
-			LOADCELL_3.raw_data[1] = spi_buf[1];
-
-			HAL_GPIO_WritePin(GPIOG, GPIO_PIN_4, GPIO_PIN_RESET);
-			//ret = HAL_SPI_TransmitReceive(&hspi1,(uint8_t *)&ADC_CH4,  (uint8_t *)spi_buf, 1, 100);
-			HAL_GPIO_WritePin(GPIOG, GPIO_PIN_4, GPIO_PIN_SET);
-
-			LOADCELL_4.raw_data[0] = spi_buf[0];
-			LOADCELL_4.raw_data[1] = spi_buf[1];
-
-		}
 
 		//Translate 12bit value into relative voltage (given Vref is 5V)
 
-		LOADCELL_1.read_value_voltage = ((float)(LOADCELL_1.raw_data[1] << 8 |  LOADCELL_1.raw_data[0] )/ 4095) * 5;
-		LOADCELL_2.read_value_voltage = ((float)(LOADCELL_2.raw_data[1] << 8 |  LOADCELL_2.raw_data[0] )/ 4095) * 5;
-		LOADCELL_3.read_value_voltage = ((float)(LOADCELL_3.raw_data[1] << 8 |  LOADCELL_3.raw_data[0] )/ 4095) * 5;
-		LOADCELL_4.read_value_voltage = ((float)(LOADCELL_4.raw_data[1] << 8 |  LOADCELL_4.raw_data[0] )/ 4095) * 5;
+		LOADCELL_1.read_value_voltage = ((float)(LOADCELL_1.raw_data)/ 4095) * 5;
+		LOADCELL_2.read_value_voltage = ((float)(LOADCELL_2.raw_data)/ 4095) * 5;
+		LOADCELL_3.read_value_voltage = ((float)(LOADCELL_3.raw_data)/ 4095) * 5;
+		LOADCELL_4.read_value_voltage = ((float)(LOADCELL_4.raw_data)/ 4095) * 5;
 
 
 
@@ -785,10 +743,16 @@ while (1) {
 		//Check if we need to go directly to PURGE
 		if(switch_case_state == 10)
 		{
+		  	SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
+		  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS); //resetting flag back to RXCONTINUOUS mode after flag has been set!
+			__NVIC_EnableIRQ(EXTI9_5_IRQn);
 			break; //enter PURGE state
 		}
 		else
 		{
+		  	SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
+		  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS); //resetting flag back to RXCONTINUOUS mode after flag has been set!
+			__NVIC_EnableIRQ(EXTI9_5_IRQn);
 			switch_case_state = 1; //input selector state
 			break;
 		}
@@ -1140,8 +1104,14 @@ while (1) {
 		CH2_OP.port->ODR &= ~(CH2_Operate);
 
 		//Ensure igntion is not igniting
-		Ignition1_ARM.port->ODR &= ~(IGNITION1_ARM);
-		Ignition1_OP.port->ODR &= ~(IGNITION1_OP);
+		Ignition1_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition1_OP.port->ODR |= (IGNITION2_OP);
+
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
+
+		CH4_ARM.port->ODR &= ~(CH4_Arm);
+		CH4_OP.port->ODR &= ~(CH4_Operate);
 
 		//Enable N2O Fill
 		led_n2o.port->ODR|=N2O_LED;
@@ -1203,6 +1173,16 @@ while (1) {
 
 		//Clear Error
 		error = 0x00 << 13;
+
+		//Ensure Ignition is not igniting
+		Ignition1_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition1_OP.port->ODR |= (IGNITION2_OP);
+
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
+
+		CH4_ARM.port->ODR &= ~(CH4_Arm);
+		CH4_OP.port->ODR &= ~(CH4_Operate);
 
 		//Ensure Purge is not purging
 		CH1_ARM.port->ODR |= (CH1_Arm);
@@ -1270,10 +1250,14 @@ while (1) {
 
 
 		//Turn OFF ignition coil relays
-		Ignition1_ARM.port->ODR &= ~(IGNITION1_ARM);
-		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		Ignition1_OP.port->ODR &= ~(IGNITION1_OP);
-		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
+		Ignition1_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition1_OP.port->ODR |= (IGNITION2_OP);
+
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
+
+		CH4_ARM.port->ODR &= ~(CH4_Arm);
+		CH4_OP.port->ODR &= ~(CH4_Operate);
 
 
 		//Ensure PURGE is not purging
@@ -1311,8 +1295,11 @@ while (1) {
 		//output a high to stop purging!
 
 		//Ensure Ignition is not igniting
-		Ignition1_ARM.port->ODR &= ~(IGNITION2_ARM);
-		Ignition1_OP.port->ODR &= ~(IGNITION2_OP);
+		Ignition1_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition1_OP.port->ODR |= (IGNITION2_OP);
+
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
 
 		//Turn off N2O Solenoid and turn off LED
 		CH3_ARM.port->ODR &= ~(CH3_Arm);
@@ -1337,7 +1324,7 @@ while (1) {
 	case 0x80:
 
 		//Disable IRQs - we are igniting, nothing can stop this....
-		__disable_irq();
+		//__disable_irq();
 
 		//Set SMD LEDs
 		LED_1.port -> ODR &= ~LED_1_PWR;
@@ -1373,52 +1360,18 @@ while (1) {
 		CH1_OP.port->ODR |= (CH1_Operate);
 
 
-		//Spark Generation Sequence, 5 sparks total
-	//	Ignition1_ARM.port->ODR |= IGNITION1_ARM;
-		//Ignition1_OP.port->ODR |= IGNITION1_OP;
-		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		Ignition2_OP.port->ODR |= (IGNITION2_OP);
-		HAL_Delay(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
-		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		HAL_Delay(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR |= (IGNITION2_OP);
-		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		HAL_Delay(500); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
-		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		HAL_Delay(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR |= (IGNITION2_OP);
-		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		HAL_Delay(500); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
-		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		HAL_Delay(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR |= (IGNITION2_OP);
-		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		HAL_Delay(500); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
-		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		HAL_Delay(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR |= (IGNITION2_OP);
-		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		HAL_Delay(500); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
-		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		HAL_Delay(30); //provide a delay to ensure fire state has been activated for a long enough time
+		//Spark Generation Enable Relay
 
-		//Disarm Ignition circuit
-		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		Ignition2_OP.port->ODR |= (IGNITION2_OP);
+		 CH4_ARM.port->ODR |= (CH4_Arm);
+		 CH4_OP.port->ODR |= (CH4_Operate);
 
-		HAL_Delay(500); //provide a delay to ensure fire state has been activated for a long enough time
 
 		//Manually removes "ignition" state bit from last read LoRa packet info
-		state &= ~(0x02 <<2); //this if more so for remote control 0bxxxx11xx become 0
+		//state &= ~(0x02 <<2); //this if more so for remote control 0bxxxx11xx become 0
 		switch_case_state = 0;
 		//turns of the ignite state once done!
 		//state cannot be triggered more than once sequentially!
-		__enable_irq();
+		//__enable_irq();
 		break;
 
 
@@ -1654,7 +1607,7 @@ void RX_Receive(void)
 	__NVIC_DisableIRQ(EXTI9_5_IRQn); //uncomment after testing!!
 	//__NVIC_DisableIRQ(TIM1_UP_TIM10_IRQn); //Disable IQR for LoRa Hardware Timer
 
-	HAL_Delay(1000); //important!!
+	HAL_Delay(350); //important!!
 
 
 	bool RX_result = SX1272_readReceive(&lora, pointerdata, LORA_MSG_LENGTH);
@@ -1696,19 +1649,19 @@ void RX_Receive(void)
 
 				packet.data[0] = GSE_Command.data[0];
 
-				* floatPtr = (uint8_t *) &TRANSDUCER_1.read_value_bar;
+				floatPtr = (uint8_t *) &TRANSDUCER_1.read_value_bar;
 				packet.data[1] = floatPtr[3];
 				packet.data[2] = floatPtr[2];
 				packet.data[3] = floatPtr[1];
 				packet.data[4] = floatPtr[0];
 
-				* floatPtr = (uint8_t *) &TRANSDUCER_2.read_value_bar;
+				floatPtr = (uint8_t *) &TRANSDUCER_2.read_value_bar;
 				packet.data[5] = floatPtr[3];
 				packet.data[6] = floatPtr[2];
 				packet.data[7] = floatPtr[1];
 				packet.data[8] = floatPtr[0];
 
-				* floatPtr = (uint8_t *) &TRANSDUCER_3.read_value_bar;
+				floatPtr = (uint8_t *) &TRANSDUCER_3.read_value_bar;
 				packet.data[9] = floatPtr[3];
 				packet.data[10] = floatPtr[2];
 				packet.data[11] = floatPtr[1];
@@ -1716,26 +1669,26 @@ void RX_Receive(void)
 
 
 
-				* floatPtr = (uint8_t *) &THERMOCOUPLE_1.temp;
+				floatPtr = (uint8_t *) &THERMOCOUPLE_1.temp;
 				packet.data[13] = floatPtr[3];
 				packet.data[14] = floatPtr[2];
 				packet.data[15] = floatPtr[1];
 				packet.data[16] = floatPtr[0];
 
-				* floatPtr = (uint8_t *) &THERMOCOUPLE_2.temp;
+				floatPtr = (uint8_t *) &THERMOCOUPLE_2.temp;
 				packet.data[17] = floatPtr[3];
 				packet.data[18] = floatPtr[2];
 				packet.data[19] = floatPtr[1];
 				packet.data[20] = floatPtr[0];
 
-				* floatPtr = (uint8_t *) &THERMOCOUPLE_3.temp;
+				floatPtr = (uint8_t *) &THERMOCOUPLE_3.temp;
 				packet.data[21] = floatPtr[3];
 				packet.data[22] = floatPtr[2];
 				packet.data[23] = floatPtr[1];
 				packet.data[24] = floatPtr[0];
 
 
-				* floatPtr = (uint8_t *) &THERMOCOUPLE_4.temp;
+				floatPtr = (uint8_t *) &THERMOCOUPLE_4.temp;
 				packet.data[25] = floatPtr[3];
 				packet.data[26] = floatPtr[2];
 				packet.data[27] = floatPtr[1];
@@ -1755,7 +1708,7 @@ void RX_Receive(void)
 
 
 				packet.data[0] = GSE_Command.data[0];
-				* floatPtr = (uint8_t *) &SMD_TEMP_SENSE.temp;
+				floatPtr = (uint8_t *) &SMD_TEMP_SENSE.temp;
 				packet.data[1] = floatPtr[3];
 				packet.data[2] = floatPtr[2];
 				packet.data[3] = floatPtr[1];
@@ -1766,7 +1719,7 @@ void RX_Receive(void)
 				packet.data[7] = 0x00;
 				packet.data[8] = 0x00;
 
-				* floatPtr = (uint8_t *) &LOADCELL_1.read_value_weight;
+				floatPtr = (uint8_t *) &LOADCELL_1.read_value_weight;
 				packet.data[9] = floatPtr[3];
 				packet.data[10] = floatPtr[2];
 				packet.data[11] = floatPtr[1];
@@ -1774,19 +1727,19 @@ void RX_Receive(void)
 
 
 
-				* floatPtr = (uint8_t *) &LOADCELL_2.read_value_weight;
+				floatPtr = (uint8_t *) &LOADCELL_2.read_value_weight;
 				packet.data[13] = floatPtr[3];
 				packet.data[14] = floatPtr[2];
 				packet.data[15] = floatPtr[1];
 				packet.data[16] = floatPtr[0];
 
-				* floatPtr = (uint8_t *) &LOADCELL_3.read_value_weight;
+				floatPtr = (uint8_t *) &LOADCELL_3.read_value_weight;
 				packet.data[17] = floatPtr[3];
 				packet.data[18] = floatPtr[2];
 				packet.data[19] = floatPtr[1];
 				packet.data[20] = floatPtr[0];
 
-				* floatPtr = (uint8_t *) &LOADCELL_4.read_value_weight;
+				floatPtr = (uint8_t *) &LOADCELL_4.read_value_weight;
 				packet.data[21] = floatPtr[3];
 				packet.data[22] = floatPtr[2];
 				packet.data[23] = floatPtr[1];
