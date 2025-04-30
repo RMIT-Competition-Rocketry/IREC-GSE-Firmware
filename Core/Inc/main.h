@@ -159,6 +159,9 @@ void RX_Receive(void);
 //#define LORA_CS GPIO_ODR_OD11
 #define LORA_DIO0 GPIO_ODR_OD7 //DIO0 GPIO
 
+#define ADDITIONALADC_CS GPIO_ODR_OD6
+#define LOADCELLADC_CS GPIO_ODR_OD2
+
 
 
 

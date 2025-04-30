@@ -50,9 +50,11 @@
  * @brief   SPI clock phase enum
  * @details Describes when to begin capturing data
  */
+
+
 typedef enum {
-  SPI_CPHA_FIRST, // Begin data capture on first clock transition
-  SPI_CPHA_SECOND // Begin data capture on second clock transition
+  SPI_CPHA_FIRST = 0, // Begin data capture on first clock transition
+  SPI_CPHA_SECOND = 1 // Begin data capture on second clock transition
 } SPI_Phase;
 
 /**

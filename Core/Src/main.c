@@ -214,15 +214,15 @@ static void MX_I2C2_Init(void);
 
  static GPIO RF_SW;
  GPIO LORA_CS_GPIO;
+
+ static GPIO ADDITIONAL_ADC_CS;
+ static GPIO LOADCELL_CS;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
- SPI_Config ADC_SPICONFIG = SPI_CONFIG_DEFAULT; // Using default settings as base
- 	 ADC_SPICONFIG.CPHA       = SPI_CPHA_FIRST;     // Begin on first clock edge
- 	 ADC_SPICONFIG.CPOL       = SPI_CPOL0;          // Idle clock low
- 	 ADC_SPICONFIG.BR 		   = SPI_BR_PCLK16;
+
 
 
 
@@ -325,7 +325,39 @@ int main(void)
 	MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
 
+	configureSPIBus1();
+	configureSPIBus5();
 	configureSPIBus6();
+
+	GPIO_init(&LOADCELL_CS, GPIOA, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x02);
+	LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+
+
+	SPI_Config 	ADC_SPICONFIG = SPI_CONFIG_DEFAULT; // Using default settings as base
+	 	 	 ADC_SPICONFIG.CPHA       = SPI_CPHA_FIRST;     // Begin on first clock edge
+	 	 	 ADC_SPICONFIG.CPOL       = SPI_CPOL1;          // Idle clock low
+	 	 	 ADC_SPICONFIG.BR 		  = SPI_BR_PCLK16;
+	 	 	 ADC_SPICONFIG.DFF		  = SPI_DFF16;
+
+	 static SPI_t ADDTIONAL_ADC;
+	 static SPI_t LOADCELL_ADC;
+	 ADDTIONAL_ADC = SPI_init(SPI5, &ADC_SPICONFIG);
+	 LOADCELL_ADC = SPI_init(SPI1, &ADC_SPICONFIG);
+
+
+	 uint16_t SPI_rec = 0x0000;
+	 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+	 SPI_rec = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH1);
+	 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+	 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+	 SPI_rec = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH2);
+	 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+	 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+	 SPI_rec = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH3);
+	 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+	 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+	 SPI_rec = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH4);
+	 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
 
 
 //*******************************NORMAL GPIO INITALISATIONS*************************************************************

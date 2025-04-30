@@ -45,6 +45,7 @@ void configureSPIBus1(void) //for ADC transducers
 	GPIOA->OSPEEDR |= (0x03<<GPIO_OSPEEDR_OSPEED5_Pos | 0x03<<GPIO_OSPEEDR_OSPEED6_Pos | 0x03<<GPIO_OSPEEDR_OSPEED7_Pos); //fast mode
     GPIOA->AFR[0] |= (5 << (4 * 5)) | (5 << (4 * 6)) | (5 << (4 * 7));
 
+    /*
 	//Chip Select for Transducer: PG4
 	GPIOG->MODER |= 0x01 << GPIO_MODER_MODE4_Pos;
 	GPIOG->PUPDR &= ~(GPIO_PUPDR_PUPD4_Msk);
@@ -79,6 +80,8 @@ void configureSPIBus1(void) //for ADC transducers
 	SPI1->CR1 |= SPI_CR1_DFF; //16 bit mode has been selected!
 	SPI1->CR1 &= ~(SPI_CR1_RXONLY | SPI_CR1_BIDIMODE);
 	SPI1->CR1 |= SPI_CR1_SPE; //enables the protocol
+
+	*/
 }
 
 
