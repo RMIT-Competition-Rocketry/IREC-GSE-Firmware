@@ -2,10 +2,10 @@
 ../Drivers/CMSIS/Include/core_cm4.h:1814:22:__NVIC_SetPriority	16	static
 ../Core/Src/driver.c:10:7:configureI2CBus1	4	static
 ../Core/Src/driver.c:37:6:configureSPIBus1	4	static
-../Core/Src/driver.c:85:6:configureSPIBus5	4	static
-../Core/Src/driver.c:110:6:configureSPIBus6	4	static
-../Core/Src/driver.c:159:6:configureSPIBus4	4	static
-../Core/Src/driver.c:198:6:configureRCC_APB1	4	static,ignoring_inline_asm
-../Core/Src/driver.c:211:6:configureRCC_APB2	4	static,ignoring_inline_asm
-../Core/Src/driver.c:223:6:configureRCC_AHB1	4	static,ignoring_inline_asm
-../Core/Src/driver.c:232:6:configure_TIM1	8	static
+../Core/Src/driver.c:88:6:configureSPIBus5	4	static
+../Core/Src/driver.c:113:6:configureSPIBus6	4	static
+../Core/Src/driver.c:162:6:configureSPIBus4	4	static
+../Core/Src/driver.c:201:6:configureRCC_APB1	4	static,ignoring_inline_asm
+../Core/Src/driver.c:214:6:configureRCC_APB2	4	static,ignoring_inline_asm
+../Core/Src/driver.c:226:6:configureRCC_AHB1	4	static,ignoring_inline_asm
+../Core/Src/driver.c:235:6:configure_TIM1	8	static
