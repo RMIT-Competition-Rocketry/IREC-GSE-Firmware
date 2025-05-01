@@ -124,6 +124,9 @@ static const uint16_t ADC_CH4 = 0b0001100000000000;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C2_Init(void);
+
+void THERMOCOUPLE_CONFIG(uint8_t ADDR, char THERMOCOUPLE_TYPE);
+float THERMOCOUPLE_GETTEMP(uint8_t ADDR);
 //static void MX_TIM6_Init(void); -- NEED TO IMPLEMENT LORA PACKET TIMELOUT
 /* USER CODE BEGIN PFP */
 
@@ -322,12 +325,14 @@ int main(void)
 	HAL_Delay(100); //important!!
 
 	MX_GPIO_Init();
-	MX_I2C2_Init();
+
   /* USER CODE BEGIN 2 */
 
 	configureSPIBus6();
 	configureSPIBus1();
 	configureSPIBus5();
+
+	MX_I2C2_Init();
 
 	GPIO_init(&LOADCELL_CS, GPIOA, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x02);
 	LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
@@ -345,6 +350,12 @@ int main(void)
 	 static SPI_t LOADCELL_ADC;
 	 ADDTIONAL_ADC = SPI_init(SPI5, &ADC_SPICONFIG);
 	 LOADCELL_ADC = SPI_init(SPI1, &ADC_SPICONFIG);
+
+
+	 THERMOCOUPLE_CONFIG(THERMOCOUPLE_1.ADDR, THERMOCOUPLE_1.thermocouple_type);
+	 THERMOCOUPLE_CONFIG(THERMOCOUPLE_2.ADDR, THERMOCOUPLE_2.thermocouple_type);
+	 THERMOCOUPLE_CONFIG(THERMOCOUPLE_3.ADDR, THERMOCOUPLE_3.thermocouple_type);
+	 THERMOCOUPLE_CONFIG(THERMOCOUPLE_4.ADDR, THERMOCOUPLE_4.thermocouple_type);
 
 
 
@@ -557,6 +568,11 @@ while (1) {
 
 //Extract Thermocouple Temp
 		//To Do - Issues with Thermocouples ATM with accurate readings
+		THERMOCOUPLE_1.temp = THERMOCOUPLE_GETTEMP(THERMOCOUPLE_1.ADDR);
+		THERMOCOUPLE_2.temp = THERMOCOUPLE_GETTEMP(THERMOCOUPLE_2.ADDR);
+		THERMOCOUPLE_3.temp = THERMOCOUPLE_GETTEMP(THERMOCOUPLE_3.ADDR);
+		THERMOCOUPLE_4.temp = THERMOCOUPLE_GETTEMP(THERMOCOUPLE_4.ADDR);
+
 
 		//Check if SX1272 has recieved a packet, if not move on
 		if(triggerRX){RX_Receive();}else{__asm("NOP");}
@@ -2038,6 +2054,129 @@ i2c_comms_result config_thermocouple(TEMP_SENSE *temp_sense){
 
 
 	return result;
+}
+
+THERMOCOUPLE_CONFIG(uint8_t ADDR, char THERMOCOUPLE_TYPE){
+
+	HAL_StatusTypeDef ret;
+	uint8_t buf[2];
+	buf[0] = 0;
+	buf[1] = 0;
+
+	if (THERMOCOUPLE_TYPE == 'K'){
+		buf[1] |= 0b000 << 4;
+	}
+	else if (THERMOCOUPLE_TYPE == 'J'){
+		buf[1] |= 0b001 << 4;
+	}
+	else if (THERMOCOUPLE_TYPE == 'T'){
+		buf[1] |= 0b010 << 4;
+	}
+	else if (THERMOCOUPLE_TYPE == 'N'){
+		buf[1] |= 0b011 << 4;
+	}
+	else if (THERMOCOUPLE_TYPE == 'S'){
+		buf[1] |= 0b100 << 4;
+	}
+	else if (THERMOCOUPLE_TYPE == 'E'){
+		buf[1] |= 0b101 << 4;
+	}
+	else if (THERMOCOUPLE_TYPE == 'B'){
+		buf[1] |= 0b110 << 4;
+	}
+	else if (THERMOCOUPLE_TYPE == 'R'){
+		buf[1] |= 0b111 << 4;
+	}
+	else{
+	}
+
+
+	buf[0] = THERMO_REG_SENSOR_CONFIG;	//Pointer Addr
+	buf[1] |= 0b00000100;			  	//Data for data reg at pointer addr
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100); //ADDR OR'ed with 0x01 for read command
+
+  	buf[0] = THERMO_REG_DEVICE_CONFIG;
+  	buf[1] = 0b00011100; //Coldjunc resolution = 0.0625deg, ADC res = 18bit, burst mode temp = 128 samples, shutdown mode = normal operation
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+
+ 	buf[0] = THERMO_REG_ALERT1_LIMIT;
+ 	buf[1] = 0b01111111; //Coldjunc resolution = 0.0625deg, ADC res = 18bit, burst mode temp = 128 samples, shutdown mode = normal operation
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+
+
+  	buf[0] = THERMO_REG_ALERT2_LIMIT;
+  	buf[1] = 0b01111111; //Coldjunc resolution = 0.0625deg, ADC res = 18bit, burst mode temp = 128 samples, shutdown mode = normal operation
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+
+  	buf[0] = THERMO_REG_ALERT3_LIMIT;
+  	buf[1] = 0b01111111; //Coldjunc resolution = 0.0625deg, ADC res = 18bit, burst mode temp = 128 samples, shutdown mode = normal operation
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+
+	buf[0] = THERMO_REG_ALERT4_LIMIT;
+	buf[1] = 0b01111111; //Coldjunc resolution = 0.0625deg, ADC res = 18bit, burst mode temp = 128 samples, shutdown mode = normal operation
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+
+	buf[0] = THERMO_REG_ALERT1_CONFIG;
+	buf[1] = 0b00011101;
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100);
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100);
+	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100);
+
+	buf[0] = THERMO_REG_ALERT2_CONFIG;
+	buf[1] = 0b00011101;
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100);
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100);
+	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100);
+
+	buf[0] = THERMO_REG_ALERT3_CONFIG;
+	buf[1] = 0b00011101;
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100);
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100);
+	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100);
+
+	buf[0] = THERMO_REG_ALERT4_CONFIG;
+	buf[1] = 0b00011101;
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100);
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100);
+	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100);
+
+	return;
+}
+
+
+float THERMOCOUPLE_GETTEMP(uint8_t ADDR){
+	HAL_StatusTypeDef ret;
+	uint8_t buf[8];
+	buf[0] = 0;
+	buf[1] = 1;
+
+  	buf[0] = THERMO_REG_HJ_TEMP;
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //Write to thermocouple IC, to move pointer to hot junc reg
+  	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 2, 100);	//Read 2 bytes from the hot junc reg into return val
+
+	float val = ((int16_t)buf[0] * 16) | (buf[1] / 16);
+	float temp = val;
+	if ((buf[0] & 0x80) == 0x80){ //If the temp is < 0deg
+		temp = temp - 4096;
+		temp = temp * -1;
+		}
+	else{
+		__asm("NOP");//If temp is >= 0deg, dont need to do anything
+	}
+	return temp;
+
 }
 
 
