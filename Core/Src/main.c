@@ -266,7 +266,7 @@ float THERMOCOUPLE_GETTEMP(uint8_t ADDR);
 
  TEMP_SENSE SMD_TEMP_SENSE = {.ADDR = 0x48 << 1, .resolution = 0xC, .thermocouple_type = 0x00}; //Use 8-bit address;
  TEMP_SENSE THERMOCOUPLE_1 = {.ADDR = 0b11000000, .resolution = 0x12, .thermocouple_type = 'K'};
- TEMP_SENSE THERMOCOUPLE_2 = {.ADDR = 0b11000010, .resolution = 0x12, .thermocouple_type = 'J'};
+ TEMP_SENSE THERMOCOUPLE_2 = {.ADDR = 0b11000010, .resolution = 0x12, .thermocouple_type = 'K'};
  TEMP_SENSE THERMOCOUPLE_3 = {.ADDR = 0b11000100, .resolution = 0x12, .thermocouple_type = 'J'};
  TEMP_SENSE THERMOCOUPLE_4 = {.ADDR = 0b11000110, .resolution = 0x12, .thermocouple_type = 'J'};
 
@@ -568,6 +568,7 @@ while (1) {
 
 //Extract Thermocouple Temp
 		//To Do - Issues with Thermocouples ATM with accurate readings
+
 		THERMOCOUPLE_1.temp = THERMOCOUPLE_GETTEMP(THERMOCOUPLE_1.ADDR);
 		THERMOCOUPLE_2.temp = THERMOCOUPLE_GETTEMP(THERMOCOUPLE_2.ADDR);
 		THERMOCOUPLE_3.temp = THERMOCOUPLE_GETTEMP(THERMOCOUPLE_3.ADDR);
@@ -1623,7 +1624,7 @@ void RX_Receive(void)
 	__NVIC_DisableIRQ(EXTI9_5_IRQn); //uncomment after testing!!
 	//__NVIC_DisableIRQ(TIM1_UP_TIM10_IRQn); //Disable IQR for LoRa Hardware Timer
 
-	HAL_Delay(350); //important!!
+	HAL_Delay(380); //important!!
 
 
 	bool RX_result = SX1272_readReceive(&lora, pointerdata, LORA_MSG_LENGTH);
@@ -2160,7 +2161,7 @@ float THERMOCOUPLE_GETTEMP(uint8_t ADDR){
 	HAL_StatusTypeDef ret;
 	uint8_t buf[8];
 	buf[0] = 0;
-	buf[1] = 1;
+	buf[1] = 0;
 
   	buf[0] = THERMO_REG_HJ_TEMP;
   	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //Write to thermocouple IC, to move pointer to hot junc reg
