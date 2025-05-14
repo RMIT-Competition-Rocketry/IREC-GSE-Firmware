@@ -508,6 +508,7 @@ int main(void)
 	//re-enable to turn on LoRa RX interrupt!
 
 	SX1272_init(&lora,"GSE_LORA", LORA_PORT, LORA_CS, SX1272_BW500, SX1272_SF9, SX1272_CR5);
+	SX1272_enableBoost(&lora, true);
 	SX1272_startReceive(&lora);
 	SX1272_clearIRQ(&lora, SX1272_LORA_IRQ_RXDONE);
 

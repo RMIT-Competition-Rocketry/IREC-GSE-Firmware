@@ -318,7 +318,7 @@ void SX1272_standby(SX1272_t *lora) {
 void SX1272_transmit(SX1272_t *lora, uint8_t *pointerdata) {
   // Set device to standby
   _SX1272_setMode(lora, SX1272_MODE_STDBY);
-  SX1272_enableBoost(lora, true);
+
 
   // TODO: add in proper read-mask-write operation for setting DIO mapping
   //
