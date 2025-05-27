@@ -42,6 +42,7 @@
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim6;
 I2C_HandleTypeDef hi2c2;
+
 /* USER CODE BEGIN PV */
 
 //These are here instead of main.h as I don't wanna go into different documents to remember definitions
@@ -76,6 +77,40 @@ int min_weight_error_mode = 4.1;
 
 
 
+
+
+//THERMOCOUPLE REGS ADDR
+
+static const uint8_t THERMO_REG_HJ_TEMP = 0b00000000;
+static const uint8_t THERMO_REG_JUNC_TEMP_DELTA = 0b00000001;
+static const uint8_t THERMO_REG_CJ_TEMP = 0b00000010;
+static const uint8_t THERMO_REG_RAW_ADC = 0b00000011;
+static const uint8_t THERMO_REG_STATUS = 0b00000100;
+static const uint8_t THERMO_REG_SENSOR_CONFIG = 0b00000101;
+static const uint8_t THERMO_REG_DEVICE_CONFIG = 0b00000110;
+static const uint8_t THERMO_REG_ALERT1_CONFIG = 0b00001000;
+static const uint8_t THERMO_REG_ALERT2_CONFIG = 0b00001001;
+static const uint8_t THERMO_REG_ALERT3_CONFIG = 0b00001010;
+static const uint8_t THERMO_REG_ALERT4_CONFIG = 0b00001011;
+static const uint8_t THERMO_REG_ALERT1_HYST = 0b00001100;
+static const uint8_t THERMO_REG_ALERT2_HYST = 0b00001101;
+static const uint8_t THERMO_REG_ALERT3_HYST = 0b00001110;
+static const uint8_t THERMO_REG_ALERT4_HYST = 0b00001111;
+static const uint8_t THERMO_REG_ALERT1_LIMIT = 0b00010000;
+static const uint8_t THERMO_REG_ALERT2_LIMIT = 0b00010001;
+static const uint8_t THERMO_REG_ALERT3_LIMIT = 0b00010010;
+static const uint8_t THERMO_REG_ALERT4_LIMIT = 0b00010011;
+static const uint8_t THERMO_REG_ID = 0b00100000;
+
+
+//0-5V ADC Channel Select
+static const uint16_t ADC_CH1 = 0b0000000000000000;
+static const uint16_t ADC_CH2 = 0b0000100000000000;
+static const uint16_t ADC_CH3 = 0b0001000000000000;
+static const uint16_t ADC_CH4 = 0b0001100000000000;
+
+
+
  	 //Error Code definitions here;
 /*
  * ->
@@ -89,6 +124,9 @@ int min_weight_error_mode = 4.1;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C2_Init(void);
+
+void THERMOCOUPLE_CONFIG(uint8_t ADDR, char THERMOCOUPLE_TYPE);
+float THERMOCOUPLE_GETTEMP(uint8_t ADDR);
 //static void MX_TIM6_Init(void); -- NEED TO IMPLEMENT LORA PACKET TIMELOUT
 /* USER CODE BEGIN PFP */
 
@@ -105,13 +143,12 @@ static void MX_I2C2_Init(void);
  //do it for each sensor/converter
  //I2C
 // static ADT75ARMZ temp_sensor;
- static MCP96RL00_EMX_1 thermocouple_1;
- static MCP96RL00_EMX_1 thermocouple_2;
- static MCP96RL00_EMX_1 thermocouple_3;
- static MCP96RL00_EMX_1 thermocouple_4;
+// static MCP96RL00_EMX_1 thermocouple_1;
+// static MCP96RL00_EMX_1 thermocouple_2;
+// static MCP96RL00_EMX_1 thermocouple_3;
+// static MCP96RL00_EMX_1 thermocouple_4;
  //SPI
- static ADC124S021 LoadCells;
- static ADC124S021 Transducers;
+
 
 
  //interrupt driven GPIO
@@ -179,10 +216,21 @@ static void MX_I2C2_Init(void);
 
 
  static GPIO RF_SW;
+ GPIO LORA_CS_GPIO;
+
+ static GPIO LOADCELL_CS;
+ static GPIO ADDITIONAL_ADC_CS;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+
+
+
+
+
+
 
 
 //HAL LIB I2C COMMS SETUP - Added JC 07-04-2025
@@ -201,13 +249,39 @@ static void MX_I2C2_Init(void);
  }i2c_comms_result;
 
 
+ typedef struct{
+	 bool comms_ok;
+	 uint16_t raw_data;
+	 float read_value_voltage;
+	 float read_value_bar;
+ }TRANSDUCER_PRESSURE;
+
+ typedef struct{
+	 bool comms_ok;
+	 uint16_t raw_data;
+	 float read_value_voltage;
+	 float read_value_weight;
+ }LOADCELL_WEIGHT;
+
+
  TEMP_SENSE SMD_TEMP_SENSE = {.ADDR = 0x48 << 1, .resolution = 0xC, .thermocouple_type = 0x00}; //Use 8-bit address;
  TEMP_SENSE THERMOCOUPLE_1 = {.ADDR = 0b11000000, .resolution = 0x12, .thermocouple_type = 'K'};
- TEMP_SENSE THERMOCOUPLE_2 = {.ADDR = 0b11000010, .resolution = 0x12, .thermocouple_type = 'J'};
+ TEMP_SENSE THERMOCOUPLE_2 = {.ADDR = 0b11000010, .resolution = 0x12, .thermocouple_type = 'K'};
  TEMP_SENSE THERMOCOUPLE_3 = {.ADDR = 0b11000100, .resolution = 0x12, .thermocouple_type = 'J'};
  TEMP_SENSE THERMOCOUPLE_4 = {.ADDR = 0b11000110, .resolution = 0x12, .thermocouple_type = 'J'};
 
- i2c_comms_result config_thermocouple();
+
+ TRANSDUCER_PRESSURE TRANSDUCER_1 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_bar = 0};
+ TRANSDUCER_PRESSURE TRANSDUCER_2 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_bar = 0};
+ TRANSDUCER_PRESSURE TRANSDUCER_3 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_bar = 0};
+ TRANSDUCER_PRESSURE TRANSDUCER_4 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_bar = 0};
+
+ LOADCELL_WEIGHT LOADCELL_1 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_weight = 0};
+ LOADCELL_WEIGHT LOADCELL_2 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_weight = 0};
+ LOADCELL_WEIGHT LOADCELL_3 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_weight = 0};
+ LOADCELL_WEIGHT LOADCELL_4 = {.comms_ok = false, .raw_data = 0, .read_value_voltage = 0, .read_value_weight = 0};
+
+ i2c_comms_result config_thermocouple(TEMP_SENSE *temp_sense);
  i2c_comms_result get_temp(TEMP_SENSE *temp_sense);
 
 /* USER CODE END 0 */
@@ -220,6 +294,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+	HAL_StatusTypeDef ret;
 
   /* USER CODE END 1 */
 
@@ -234,11 +309,6 @@ int main(void)
   /* USER CODE BEGIN Init */
 
 
-//if deadman switches are activated (or set)! -> TRIGGER PURGE
-//is ISO switches are selected -> figure out what to do from there!
-//if Other switch
-//If local control switch is asserted, then the inputs from the other switches SHALL matter
-	//If not remote control will take priority!
 
 
   /* USER CODE END Init */
@@ -252,16 +322,47 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
-	delay_software_ms(100); //important!!
+	HAL_Delay(100); //important!!
 
 	MX_GPIO_Init();
-	MX_I2C2_Init();
-	//MX_I2C2_Init();
+
   /* USER CODE BEGIN 2 */
+
+	configureSPIBus6();
 	configureSPIBus1();
-	configureSPIBus6(); //SPI6
- // configureSPIBus4();
-	//configureI2CBus1();
+	configureSPIBus5();
+
+	MX_I2C2_Init();
+
+	GPIO_init(&LOADCELL_CS, GPIOA, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x02);
+	LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+
+	GPIO_init(&ADDITIONAL_ADC_CS, GPIOF, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x06);
+	ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
+
+	 SPI_Config 	ADC_SPICONFIG = SPI_CONFIG_DEFAULT; // Using default settings as base
+	 ADC_SPICONFIG.CPHA        = SPI_CPHA_SECOND;     // Begin on first clock edge
+	 ADC_SPICONFIG.CPOL        = SPI_CPOL1;          // Idle clock low
+	 ADC_SPICONFIG.BR 		  = SPI_BR_PCLK16;
+	 ADC_SPICONFIG.DFF		  = SPI_DFF16;
+
+	 static SPI_t ADDTIONAL_ADC;
+	 static SPI_t LOADCELL_ADC;
+	 ADDTIONAL_ADC = SPI_init(SPI5, &ADC_SPICONFIG);
+	 LOADCELL_ADC = SPI_init(SPI1, &ADC_SPICONFIG);
+
+
+	 THERMOCOUPLE_CONFIG(THERMOCOUPLE_1.ADDR, THERMOCOUPLE_1.thermocouple_type);
+	 THERMOCOUPLE_CONFIG(THERMOCOUPLE_2.ADDR, THERMOCOUPLE_2.thermocouple_type);
+	 THERMOCOUPLE_CONFIG(THERMOCOUPLE_3.ADDR, THERMOCOUPLE_3.thermocouple_type);
+	 THERMOCOUPLE_CONFIG(THERMOCOUPLE_4.ADDR, THERMOCOUPLE_4.thermocouple_type);
+
+
+
+
+
+
+
 
 //*******************************NORMAL GPIO INITALISATIONS*************************************************************
 
@@ -355,7 +456,10 @@ int main(void)
 
 	 GPIO_init(&RF_SW, GPIOG, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x0A);
 
+	 GPIO_init(&LORA_CS_GPIO, GPIOG, GPIO_MODER_GENERAL_PURPOSE_OUTPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x0B);
+
 	 RF_SW.port->ODR |= (GPIO_ODR_OD10);
+	 LORA_CS_GPIO.port->ODR |= (LORA_CS);
 
 	 //Ensure CH1-4 is turned off, as its currently unused
 	 CH1_ARM.port->ODR &= ~(CH1_Arm);
@@ -373,18 +477,7 @@ int main(void)
 	 //*******************************NOTE - Updated to use HAL libraries, and funcions within main.c*************************************************************
 	 // Done by JC - 07/04/2025, for first legacy launch
 
-	//ADT75ARMZ_init(&temp_sensor, I2C2, GPIOF,TEMPERATURE_SENSOR, 0x48);
-
-	//conversion rate is 63ms for thermocouple conversion. Conversion will be 63ms + (time it takes to do 4 I2C read operations)
-	//MCP96RL00_EMX_1_init(&thermocouple_1,I2C2, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, THERMOCOUPLE_1_ADDR);
-	//MCP96RL00_EMX_1_init(&thermocouple_2,I2C2, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, THERMOCOUPLE_2_ADDR);
-	//MCP96RL00_EMX_1_init(&thermocouple_3,I2C2, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, THERMOCOUPLE_3_ADDR);
-	//MCP96RL00_EMX_1_init(&thermocouple_4,I2C2, GPIOF, THERMOCOUPLE, THERMO_SAMPLE_8, RESOLUTION_HIGH, THERMOCOUPLE_4_ADDR);
-
-	//ADC124S021_init(&LoadCells,Load_Cell, LOAD_CELL_PORT, LOAD_CELL_CS);
-	//ADC124S021_init(&Transducers,Transducer, TRANSDUCER_PORT, TRANSDUCER_CS);
-
-	//configure_TIM1(); //start LoRa timer -> as late as possible!
+	configure_TIM1(); //start LoRa timer -> as late as possible!
 
 
 
@@ -393,38 +486,9 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-/*	@Param:Error
- * 	B15: Ignition Failure
- * 	B14: Relay Error #3
- * 	B13: Relay Error #2
- *  B12: Relay Error #1
- *  B11: Thermocouple Error #4
- *  B10: Thermocouple Error #3
- *  B9: Thermocouple Error #2
- *  B8: Thermocouple Error #1
- *  B7: Load Cell Error #4
- *  B6: Load Cell Error #3
- *  B5: Load Cell Error #2
- *  B4: Load Cell Error #1
- *  B3: Transducer Error #4
- *  B2: Transducer Error #3
- *  B1: Transducer Error #2
- *  B0: Transducer Error #1
- *
- *  @Param: State
- *  B7: Manual Purge
- *  B6: O2 Fill Activate
- *  B5: Selector Switch Neutral Position
- *  B4: N20 Fill Activate
- *  B3: Ignition Fire
- *  B2: Ignition Selected
- *  B1: Gas Filled
- *  B0: System Activate -> nothing can be done unless this bit is set
- */
 
 
 
-	//INT_pin_input = (GPIOD->IDR & GPIO_IDR_IDR_7); //should be a non 0 value here!
 
 	//Make sure interrupts are configured BEFORE interupts
 	GPIO_init(&LoRa_Rx_int, GPIOD, GPIO_MODER_INPUT, GPIO_OTYPER_PUSH, GPIO_OSPEEDR_MEDIUM, GPIO_PUPDRy_NO, 0x07);
@@ -439,11 +503,12 @@ int main(void)
 	EXTI->IMR |= EXTI_IMR_IM7;
 
 	//here is channel for loRa PD7
-	//NVIC_EnableIRQ(EXTI9_5_IRQn);
-	//NVIC_SetPriority(EXTI9_5_IRQn,9);
+	NVIC_EnableIRQ(EXTI9_5_IRQn);
+	NVIC_SetPriority(EXTI9_5_IRQn,9);
 	//re-enable to turn on LoRa RX interrupt!
 
 	SX1272_init(&lora,"GSE_LORA", LORA_PORT, LORA_CS, SX1272_BW500, SX1272_SF9, SX1272_CR5);
+	SX1272_enableBoost(&lora, true);
 	SX1272_startReceive(&lora);
 	SX1272_clearIRQ(&lora, SX1272_LORA_IRQ_RXDONE);
 
@@ -471,19 +536,14 @@ int main(void)
 	state = 0x00;
 
 
-	RF_SW.port->ODR |= (GPIO_ODR_OD10);
-	RF_SW.port->ODR &= ~(GPIO_ODR_OD10);
-	RF_SW.port->ODR |= (GPIO_ODR_OD10);
-	RF_SW.port->ODR &= ~(GPIO_ODR_OD10);
-	RF_SW.port->ODR |= (GPIO_ODR_OD10);
-	RF_SW.port->ODR &= ~(GPIO_ODR_OD10);
-
 	//Debugging LoRa Step - move straight into spamming packets
 	/*
 	while(1){
 		transmit_packets_spam();
 	}
 	*/
+
+	TIM1->CR1 |= TIM_CR1_CEN; //enable and start TIM1 (200ms)
 
 
 
@@ -509,25 +569,22 @@ while (1) {
 		//Check if SX1272 has recieved a packet, if not move on
 		if(triggerRX){RX_Receive();}else{__asm("NOP");}
 
-		//if variable data_thermo needs to be changed, make separate variables for each
-		//Extract data from Thermocouple 1
-	//	MCP96RL00_EMX_1_extract(&thermocouple_1, 0x60, data_thermo);
-	//	MCP96RL00_EMX_1_process(&thermocouple_1);
-		//Extract data from Thermocouple 2
-		//MCP96RL00_EMX_1_extract(&thermocouple_2, 0x61, data_thermo);
-		//MCP96RL00_EMX_1_process(&thermocouple_2);
-		//Extract data from thermocouple 3
-		//MCP96RL00_EMX_1_extract(&thermocouple_3, 0x62, data_thermo);
-		//MCP96RL00_EMX_1_process(&thermocouple_3);
-		//Extract data from thermocouple 4
-		//MCP96RL00_EMX_1_extract(&thermocouple_4, 0x63, data_thermo);
-		//MCP96RL00_EMX_1_process(&thermocouple_4);
+//Extract Thermocouple Temp
+		//To Do - Issues with Thermocouples ATM with accurate readings
+
+		THERMOCOUPLE_1.temp = THERMOCOUPLE_GETTEMP(THERMOCOUPLE_1.ADDR);
+		THERMOCOUPLE_2.temp = THERMOCOUPLE_GETTEMP(THERMOCOUPLE_2.ADDR);
+		THERMOCOUPLE_3.temp = THERMOCOUPLE_GETTEMP(THERMOCOUPLE_3.ADDR);
+		THERMOCOUPLE_4.temp = THERMOCOUPLE_GETTEMP(THERMOCOUPLE_4.ADDR);
+
 
 		//Check if SX1272 has recieved a packet, if not move on
 		if(triggerRX){RX_Receive();}else{__asm("NOP");}
 
-		//Check Thermocouple temps, if temps too high go directly to PURGE state
+//Check Thermocouple temps, if temps too high go directly to PURGE state
 		//Error flags are specifc per Thermocouple
+
+		/*
 		if(thermocouple_1.temperature >max_temp_failure_mode){switch_case_state = 10; error |=(0x01<<11);}
 		else if(thermocouple_2.temperature >max_temp_failure_mode){switch_case_state = 10; error |=(0x01<<10);}
 		else if(thermocouple_3.temperature >max_temp_failure_mode){switch_case_state = 10; error |=(0x01<<9);}
@@ -542,40 +599,137 @@ while (1) {
 			else{}
 		}
 
+		*/
+
 		//Check if SX1272 has recieved a packet, if not move on
 		if(triggerRX){RX_Receive();}else{__asm("NOP");}
 
-		//Extract Transducer Pressures
-		//ADC124S021_extract(&Transducers);
-		//uint16_t response_test = ADC124S021_ReadChannel(0);
-		//ADC124S021_process(&Transducers);
+//Get Pressure Readings from Transducers
+
+		//Done with Matt's SPI lib - JC 30/04/2025
+
+
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_1.raw_data = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH1);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_1.raw_data = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH1);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
+
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_2.raw_data = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH2);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_2.raw_data = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH2);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
+
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_3.raw_data = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH3);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_3.raw_data = ADDTIONAL_ADC.transmit(&ADDTIONAL_ADC, ADC_CH3);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
+
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_4.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH4);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
+		 ADDITIONAL_ADC_CS.port->ODR &= ~(ADDITIONALADC_CS);
+		 TRANSDUCER_4.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH4);
+		 ADDITIONAL_ADC_CS.port->ODR |= (ADDITIONALADC_CS);
+
+		//Translate 12bit value into relative voltage (given Vref is 5V)
+
+		TRANSDUCER_1.read_value_voltage = ((float)(TRANSDUCER_1.raw_data)/ 4095) * 5 + 0.00394; //Offset as per dataset found
+		//TRANSDUCER_1.read_value_voltage = TRANSDUCER_1.read_value_voltage *2; //Multiplied by 2 cos, idk, first time through correct sample is taken, every sample after that is half what it should be - find the problem? No, find a workaround? absolutely
+		TRANSDUCER_2.read_value_voltage = ((float)(TRANSDUCER_2.raw_data)/ 4095) * 5 + 0.00394;
+		//TRANSDUCER_2.read_value_voltage = TRANSDUCER_2.read_value_voltage *2;
+		TRANSDUCER_3.read_value_voltage = ((float)(TRANSDUCER_3.raw_data)/ 4095) * 5 + 0.00394;
+		//TRANSDUCER_3.read_value_voltage = TRANSDUCER_3.read_value_voltage *2;
+		TRANSDUCER_4.read_value_voltage = ((float)(TRANSDUCER_4.raw_data)/ 4095) * 5 + 0.00394;
+		//TRANSDUCER_4.read_value_voltage = TRANSDUCER_4.read_value_voltage *2;
+
+		TRANSDUCER_1.read_value_bar = TRANSDUCER_1.read_value_voltage * 60; //(voltage_read / 5) * 300 (bar) = pressure, 300/5 is 60, therefore (voltage_read) * 60 = pressure (for a 0-300bar range)
+		TRANSDUCER_2.read_value_bar = TRANSDUCER_2.read_value_voltage * 60;
+		TRANSDUCER_3.read_value_bar = TRANSDUCER_3.read_value_voltage * 60;
+		TRANSDUCER_4.read_value_bar = TRANSDUCER_4.read_value_voltage * 60;
 
 		//Check if SX1272 has recieved a packet, if not move on
 		if(triggerRX){RX_Receive();}else{}
 
 		//Check Transducer pressures, if pressures too high go directly to PURGE state
 		//Error flags are specifc per Transducer
-		if(Transducers.Converted_Value_Transducer[0] >=max_pressure_failure_mode){switch_case_state = 10; error |=(0x01<<7);}
-		else if(Transducers.Converted_Value_Transducer[1] >=max_pressure_failure_mode){switch_case_state = 10; error |=(0x01<<6); }
-		else if(Transducers.Converted_Value_Transducer[2] >=max_pressure_failure_mode){switch_case_state = 10; error |=(0x01<<5);}
-		else if(Transducers.Converted_Value_Transducer[3] >=max_pressure_failure_mode){switch_case_state = 10; error |=(0x01<<4);}
+
+		/*
+		if(TRANSDUCER_1.read_value_bar >=max_pressure_failure_mode){switch_case_state = 10;} // error |=(0x01<<7);}
+		else if(TRANSDUCER_2.read_value_bar >=max_pressure_failure_mode){switch_case_state = 10;} // error |=(0x01<<6); }
+		else if(TRANSDUCER_3.read_value_bar >=max_pressure_failure_mode){switch_case_state = 10;}// error |=(0x01<<5);}
+		else if(TRANSDUCER_4.read_value_bar >=max_pressure_failure_mode){switch_case_state = 10;}// error |=(0x01<<4);}
 		//If Error state but not direct to PURGE
 		else{
-			if(Transducers.Converted_Value_Transducer[0] >=max_pressure_error_mode){error |=(0x01<<3);}
-			else if(Transducers.Converted_Value_Transducer[1] >=max_pressure_error_mode){error |=(0x01<<2);}
-			else if(Transducers.Converted_Value_Transducer[2] >=max_pressure_error_mode){error |=(0x01<<1);}
-			else if(Transducers.Converted_Value_Transducer[3] >=max_pressure_error_mode){error |=0x01;}
+			/*
+			if(TRANSDUCER_1.read_value_bar >=max_pressure_error_mode){error |=(0x01<<3);}
+			else if(TRANSDUCER_2.read_value_bar >=max_pressure_error_mode){error |=(0x01<<2);}
+			else if(TRANSDUCER_3.read_value_bar >=max_pressure_error_mode){error |=(0x01<<1);}
+			else if(TRANSDUCER_4.read_value_bar >=max_pressure_error_mode){error |=0x01;}
+
 		//Pressures are A-OK, so carry on without doing anything
 			else{} //make it so nothing happens here -> proceed
+
+
 		}
+		*/
+
 
 		//Check if SX1272 has recieved a packet, if not move on
 		if(triggerRX){RX_Receive();}else{__asm("NOP");}
 
+//Get Loadcell Readings
 
-		//Extract Load Cell Weights
-		//ADC124S021_extract(&LoadCells);
-		//ADC124S021_process(&LoadCells);
+		//Done with Matt's SPI lib - JC 30/04/2025
+
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_1.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH1);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_1.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH1);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_2.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH2);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_2.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH2);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_3.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH3);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_3.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH3);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_4.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH4);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+		 LOADCELL_CS.port->ODR &= ~(LOADCELLADC_CS);
+		 LOADCELL_4.raw_data = LOADCELL_ADC.transmit(&LOADCELL_ADC, ADC_CH4);
+		 LOADCELL_CS.port->ODR |= (LOADCELLADC_CS);
+
+
+		//Translate 12bit value into relative voltage (given Vref is 5V)
+
+		LOADCELL_1.read_value_voltage = ((float)(LOADCELL_1.raw_data)/ 4095) * 5;
+		LOADCELL_2.read_value_voltage = ((float)(LOADCELL_2.raw_data)/ 4095) * 5;
+		LOADCELL_3.read_value_voltage = ((float)(LOADCELL_3.raw_data)/ 4095) * 5;
+		LOADCELL_4.read_value_voltage = ((float)(LOADCELL_4.raw_data)/ 4095) * 5;
+
+
+
+		LOADCELL_1.read_value_weight = LOADCELL_1.read_value_voltage * 10; //(voltage_read / 5) * 50 (kg) = pressure, 50/5 is 10, therefore (voltage_read) * 10 = weight (for a 0-50kg range)
+		LOADCELL_2.read_value_weight = LOADCELL_2.read_value_voltage * 10;
+		LOADCELL_3.read_value_weight = LOADCELL_3.read_value_voltage * 10;
+		LOADCELL_4.read_value_weight = LOADCELL_4.read_value_voltage * 10;
+
 
 		//Check if SX1272 has recieved a packet, if not move on
 		if(triggerRX){RX_Receive();}else{__asm("NOP");}
@@ -583,18 +737,14 @@ while (1) {
 
 		//Check Loadcell weights, if too low, trigger error flag
 		//Error Flags specific to loadcell
-		if(LoadCells.Converted_Value_LoadCell[0] <min_weight_error_mode){error |=(0x01<<7);}
-		else if(LoadCells.Converted_Value_LoadCell[1] <min_weight_error_mode){error |=(0x01<<6);}
-		else if(LoadCells.Converted_Value_LoadCell[2] <min_weight_error_mode){error |=(0x01<<5);}
-		else if(LoadCells.Converted_Value_LoadCell[3] <min_weight_error_mode){error |=(0x01<<4);}
+		if(LOADCELL_1.read_value_weight <min_weight_error_mode){error |=(0x01<<7);}
+		else if(LOADCELL_2.read_value_weight <min_weight_error_mode){error |=(0x01<<6);}
+		else if(LOADCELL_3.read_value_weight <min_weight_error_mode){error |=(0x01<<5);}
+		else if(LOADCELL_4.read_value_weight <min_weight_error_mode){error |=(0x01<<4);}
 		//Weights are A-OK, so carry on without doing anything
 		else{}
 
-		//Extract surface mount temp sensor temp
-		//no error checking currently implemented with internal temperature
-	//	ADT75ARMZ_extract(&temp_sensor, data_thermo, 0x48);
-	//	ADT75ARMZ_process(&temp_sensor);
-
+//Extract surface mount temp sensor temp
 		i2c_comms_result result = get_temp(&SMD_TEMP_SENSE);
 		if (result.comms_ok){
 			for (uint8_t i = 0; i <= result.return_length; i++) {
@@ -606,16 +756,23 @@ while (1) {
 			SMD_TEMP_SENSE.temp = 0x00;
 		}
 
+
 		//Check if SX1272 has recieved a packet, if not move on
 		if(triggerRX){RX_Receive();}else{__asm("NOP");}
 
 		//Check if we need to go directly to PURGE
 		if(switch_case_state == 10)
 		{
+		  	SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
+		  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS); //resetting flag back to RXCONTINUOUS mode after flag has been set!
+			__NVIC_EnableIRQ(EXTI9_5_IRQn);
 			break; //enter PURGE state
 		}
 		else
 		{
+		  	SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
+		  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS); //resetting flag back to RXCONTINUOUS mode after flag has been set!
+			__NVIC_EnableIRQ(EXTI9_5_IRQn);
 			switch_case_state = 1; //input selector state
 			break;
 		}
@@ -967,8 +1124,14 @@ while (1) {
 		CH2_OP.port->ODR &= ~(CH2_Operate);
 
 		//Ensure igntion is not igniting
-		Ignition1_ARM.port->ODR &= ~(IGNITION1_ARM);
-		Ignition1_OP.port->ODR &= ~(IGNITION1_OP);
+		Ignition1_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition1_OP.port->ODR |= (IGNITION2_OP);
+
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
+
+		CH4_ARM.port->ODR &= ~(CH4_Arm);
+		CH4_OP.port->ODR &= ~(CH4_Operate);
 
 		//Enable N2O Fill
 		led_n2o.port->ODR|=N2O_LED;
@@ -1030,6 +1193,16 @@ while (1) {
 
 		//Clear Error
 		error = 0x00 << 13;
+
+		//Ensure Ignition is not igniting
+		Ignition1_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition1_OP.port->ODR |= (IGNITION2_OP);
+
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
+
+		CH4_ARM.port->ODR &= ~(CH4_Arm);
+		CH4_OP.port->ODR &= ~(CH4_Operate);
 
 		//Ensure Purge is not purging
 		CH1_ARM.port->ODR |= (CH1_Arm);
@@ -1097,10 +1270,14 @@ while (1) {
 
 
 		//Turn OFF ignition coil relays
-		Ignition1_ARM.port->ODR &= ~(IGNITION1_ARM);
-		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		Ignition1_OP.port->ODR &= ~(IGNITION1_OP);
-		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
+		Ignition1_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition1_OP.port->ODR |= (IGNITION2_OP);
+
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
+
+		CH4_ARM.port->ODR &= ~(CH4_Arm);
+		CH4_OP.port->ODR &= ~(CH4_Operate);
 
 
 		//Ensure PURGE is not purging
@@ -1138,8 +1315,11 @@ while (1) {
 		//output a high to stop purging!
 
 		//Ensure Ignition is not igniting
-		Ignition1_ARM.port->ODR &= ~(IGNITION2_ARM);
-		Ignition1_OP.port->ODR &= ~(IGNITION2_OP);
+		Ignition1_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition1_OP.port->ODR |= (IGNITION2_OP);
+
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
 
 		//Turn off N2O Solenoid and turn off LED
 		CH3_ARM.port->ODR &= ~(CH3_Arm);
@@ -1164,7 +1344,7 @@ while (1) {
 	case 0x80:
 
 		//Disable IRQs - we are igniting, nothing can stop this....
-		__disable_irq();
+		//__disable_irq();
 
 		//Set SMD LEDs
 		LED_1.port -> ODR &= ~LED_1_PWR;
@@ -1200,52 +1380,18 @@ while (1) {
 		CH1_OP.port->ODR |= (CH1_Operate);
 
 
-		//Spark Generation Sequence, 5 sparks total
-	//	Ignition1_ARM.port->ODR |= IGNITION1_ARM;
-		//Ignition1_OP.port->ODR |= IGNITION1_OP;
-		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		Ignition2_OP.port->ODR |= (IGNITION2_OP);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
-		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR |= (IGNITION2_OP);
-		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
-		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR |= (IGNITION2_OP);
-		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
-		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR |= (IGNITION2_OP);
-		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
-		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR |= (IGNITION2_OP);
-		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
-		Ignition2_OP.port->ODR &= ~(IGNITION2_OP);
-		Ignition2_ARM.port->ODR &= ~(IGNITION2_ARM);
-		delay_software_ms(30); //provide a delay to ensure fire state has been activated for a long enough time
+		//Spark Generation Enable Relay
 
-		//Disarm Ignition circuit
-		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
-		Ignition2_OP.port->ODR |= (IGNITION2_OP);
+		 CH4_ARM.port->ODR |= (CH4_Arm);
+		 CH4_OP.port->ODR |= (CH4_Operate);
 
-		delay_software_ms(500); //provide a delay to ensure fire state has been activated for a long enough time
 
 		//Manually removes "ignition" state bit from last read LoRa packet info
-		state &= ~(0x02 <<2); //this if more so for remote control 0bxxxx11xx become 0
+		//state &= ~(0x02 <<2); //this if more so for remote control 0bxxxx11xx become 0
 		switch_case_state = 0;
 		//turns of the ignite state once done!
 		//state cannot be triggered more than once sequentially!
-		__enable_irq();
+		//__enable_irq();
 		break;
 
 
@@ -1313,20 +1459,23 @@ void SystemClock_Config(void)
   * @param None
   * @retval None
   */
-void MX_GPIO_Init(void)
+static void MX_GPIO_Init(void)
 {
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+
+  /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOG_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
 }
+
 
 
 /* USER CODE BEGIN 4 */
@@ -1376,6 +1525,18 @@ static void MX_I2C2_Init(void)
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
   /** Configure Digital filter
   */
 
@@ -1383,34 +1544,51 @@ static void MX_I2C2_Init(void)
 void TIM1_UP_TIM10_IRQHandler(void)
 {
 	hardware_timer_count++;
-	if(hardware_timer_count<5)
+	if(hardware_timer_count<15)
 	{
 		   //Hardware Timer interrupt callback for LoRa RX
-			TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register
+			TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register (clear the update event flag, the overflow of the ARR - which is what triggers this intertupt)
 	}
 	else
 	{
+		//Ensure Ignition is not igniting
+		Ignition1_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition1_OP.port->ODR |= (IGNITION2_OP);
+
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
+
+		//Turn off N2O Solenoid and turn off LED
 		CH3_ARM.port->ODR &= ~(CH3_Arm);
 		CH3_OP.port->ODR &= ~(CH3_Operate);
 		led_n2o.port->ODR &= ~(N2O_LED);
+
+		//Turn off O2 Solenoid and turn off LED
 		led_o2.port->ODR &= ~(O2_LED);
 		CH2_ARM.port->ODR &= ~(CH2_Arm);
 		CH2_OP.port->ODR &= ~(CH2_Operate);
 
-
-		CH1_ARM.port->ODR |= CH1_Arm;
-		CH1_OP.port->ODR |= CH1_Operate;
+		//Power off PURGE solenoid therefore starting purge
+		CH1_ARM.port->ODR &= ~(CH1_Arm);
+		CH1_OP.port->ODR &= ~(CH1_Operate);
 		//PURGE state
 
 		state &= ~0xFE; //0b11111110: all bits are bit-masked 0 except for system on
+		switch_case_state = 10; //force the swich case into purge as well
 		hardware_timer_count = 0;
 		TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register
 	}
+
+	TIM1->CR1 |= TIM_CR1_UDIS; 	//Disable update event generation
+	TIM1->EGR |= TIM_EGR_UG;	//Force an update and therefore reset the counter and prescaller (but not the ARR and PSC, so they will get reloaded from shadow register)
+	TIM1->CR1 &= ~TIM_CR1_UDIS; //Re-enable update event generation
+	//Timer is already enabled, and therefore will continue count, with event generation enabled, we will come back here once timer is overflowed (200ms)
+
 }
 
 void EXTI1_IRQHandler(void)
 {
-	delay_software_us(200); //200us delay to prevent debouncing
+	HAL_Delay(2); //200us delay to prevent debouncing
    	if(EXTI->PR & EXTI_PR_PR1) //if the rising edge has been detected by pin 2
    	{
    		EXTI->PR &= ~EXTI_PR_PR1; //resets the flag
@@ -1462,11 +1640,16 @@ void EXTI9_5_IRQHandler(void)
 
 void RX_Receive(void)
 {
-	__disable_irq(); //uncomment after testing!!
+	//__disable_irq(); //uncomment after testing!!
 	__NVIC_DisableIRQ(EXTI9_5_IRQn); //uncomment after testing!!
-	__NVIC_DisableIRQ(TIM1_UP_TIM10_IRQn); //Disable IQR for LoRa Hardware Timer
+	//__NVIC_DisableIRQ(TIM1_UP_TIM10_IRQn); //Disable IQR for LoRa Hardware Timer
 
-	delay_software_ms(100); //important!!
+	HAL_Delay(380); //important!!
+
+	TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register
+	TIM1->CR1 |= TIM_CR1_UDIS; 	//Disable update event generation
+	TIM1->EGR |= TIM_EGR_UG;	//Force an update and therefore reset the counter and prescaller (but not the ARR and PSC, so they will get reloaded from shadow register)
+	TIM1->CR1 &= ~TIM_CR1_UDIS; //Re-enable update event generation
 
 
 	bool RX_result = SX1272_readReceive(&lora, pointerdata, LORA_MSG_LENGTH);
@@ -1496,6 +1679,8 @@ void RX_Receive(void)
 		uint8_t transmit_state = 0;
 		//__NVIC_EnableIRQ(EXTI9_5_IRQn);
 
+		uint8_t * floatPtr;
+
 		//Transmit response based on TX_Packet_Flag
 		// to test RX and state change validation with RX command
 		switch(TX_Packet_Flag)
@@ -1504,47 +1689,57 @@ void RX_Receive(void)
 				packet = Dummy_Transmit();
 				packet.id = 0x06;
 
-				packet.data[0] = 0x00;
-				packet.data[1] = 0x00;
-				packet.data[2] = 0x00;
-				packet.data[3] = 0x00;
-				packet.data[4] = 0x00;
-				packet.data[5] = 0x00;
-				packet.data[6] = 0x00;
-				packet.data[7] = 0x00;
-				packet.data[8] = 0x00;
-				packet.data[9] = 0x00;
-				packet.data[10] = 0x00;
-				packet.data[11] = 0x00;
-				packet.data[12] = 0x00;
-				packet.data[13] = 0x00;
-				packet.data[14] = 0x00;
-				packet.data[15] = 0x00;
-				packet.data[16] = 0x00;
-				packet.data[17] = 0x00;
-				packet.data[18] = 0x00;
-				packet.data[19] = 0x00;
-				packet.data[20] = 0x00;
-				packet.data[21] = 0x00;
-				packet.data[22] = 0x00;
-				packet.data[23] = 0x00;
-				packet.data[24] = 0x00;
-				packet.data[25] = 0x00;
-				packet.data[26] = 0x00;
-				packet.data[27] = 0x00;
-				packet.data[28] = 0x00;
+				packet.data[0] = GSE_Command.data[0];
+
+				floatPtr = (uint8_t *) &TRANSDUCER_1.read_value_bar;
+				packet.data[1] = floatPtr[3];
+				packet.data[2] = floatPtr[2];
+				packet.data[3] = floatPtr[1];
+				packet.data[4] = floatPtr[0];
+
+				floatPtr = (uint8_t *) &TRANSDUCER_2.read_value_bar;
+				packet.data[5] = floatPtr[3];
+				packet.data[6] = floatPtr[2];
+				packet.data[7] = floatPtr[1];
+				packet.data[8] = floatPtr[0];
+
+				floatPtr = (uint8_t *) &TRANSDUCER_3.read_value_bar;
+				packet.data[9] = floatPtr[3];
+				packet.data[10] = floatPtr[2];
+				packet.data[11] = floatPtr[1];
+				packet.data[12] = floatPtr[0];
+
+
+
+				floatPtr = (uint8_t *) &THERMOCOUPLE_1.temp;
+				packet.data[13] = floatPtr[3];
+				packet.data[14] = floatPtr[2];
+				packet.data[15] = floatPtr[1];
+				packet.data[16] = floatPtr[0];
+
+				floatPtr = (uint8_t *) &THERMOCOUPLE_2.temp;
+				packet.data[17] = floatPtr[3];
+				packet.data[18] = floatPtr[2];
+				packet.data[19] = floatPtr[1];
+				packet.data[20] = floatPtr[0];
+
+				floatPtr = (uint8_t *) &THERMOCOUPLE_3.temp;
+				packet.data[21] = floatPtr[3];
+				packet.data[22] = floatPtr[2];
+				packet.data[23] = floatPtr[1];
+				packet.data[24] = floatPtr[0];
+
+
+				floatPtr = (uint8_t *) &THERMOCOUPLE_4.temp;
+				packet.data[25] = floatPtr[3];
+				packet.data[26] = floatPtr[2];
+				packet.data[27] = floatPtr[1];
+				packet.data[28] = floatPtr[0];
+
+
 				packet.data[29] = 0x00;
 				packet.data[30] = 0x00;
 
-					/*
-					 LoRa_Packet packet_0 = LoRa_GSEData_1(0x06,
-							&Transducers,
-							&thermocouple_1,
-							&thermocouple_2,
-							&thermocouple_3,
-							&thermocouple_4,
-							error);
-					*/
 			  	TX_Packet_Flag = 1;
 
 				break;
@@ -1555,7 +1750,7 @@ void RX_Receive(void)
 
 
 				packet.data[0] = GSE_Command.data[0];
-				uint8_t * floatPtr = (uint8_t *) &SMD_TEMP_SENSE.temp;
+				floatPtr = (uint8_t *) &SMD_TEMP_SENSE.temp;
 				packet.data[1] = floatPtr[3];
 				packet.data[2] = floatPtr[2];
 				packet.data[3] = floatPtr[1];
@@ -1565,34 +1760,40 @@ void RX_Receive(void)
 				packet.data[6] = 0x00;
 				packet.data[7] = 0x00;
 				packet.data[8] = 0x00;
-				packet.data[9] = 0x00;
-				packet.data[10] = 0x00;
-				packet.data[11] = 0x00;
-				packet.data[12] = 0x00;
-				packet.data[13] = 0x00;
-				packet.data[14] = 0x00;
-				packet.data[15] = 0x00;
-				packet.data[16] = 0x00;
-				packet.data[17] = 0x00;
-				packet.data[18] = 0x00;
-				packet.data[19] = 0x00;
-				packet.data[20] = 0x00;
-				packet.data[21] = 0x00;
-				packet.data[22] = 0x00;
-				packet.data[23] = 0x00;
-				packet.data[24] = 0x00;
+
+				floatPtr = (uint8_t *) &LOADCELL_1.read_value_weight;
+				packet.data[9] = floatPtr[3];
+				packet.data[10] = floatPtr[2];
+				packet.data[11] = floatPtr[1];
+				packet.data[12] = floatPtr[0];
+
+
+
+				floatPtr = (uint8_t *) &LOADCELL_2.read_value_weight;
+				packet.data[13] = floatPtr[3];
+				packet.data[14] = floatPtr[2];
+				packet.data[15] = floatPtr[1];
+				packet.data[16] = floatPtr[0];
+
+				floatPtr = (uint8_t *) &LOADCELL_3.read_value_weight;
+				packet.data[17] = floatPtr[3];
+				packet.data[18] = floatPtr[2];
+				packet.data[19] = floatPtr[1];
+				packet.data[20] = floatPtr[0];
+
+				floatPtr = (uint8_t *) &LOADCELL_4.read_value_weight;
+				packet.data[21] = floatPtr[3];
+				packet.data[22] = floatPtr[2];
+				packet.data[23] = floatPtr[1];
+				packet.data[24] = floatPtr[0];
+
 				packet.data[25] = 0x00;
 				packet.data[26] = 0x00;
 				packet.data[27] = 0x00;
 				packet.data[28] = 0x00;
 				packet.data[29] = 0x00;
 				packet.data[30] = 0x00;
-				/*
-				LoRa_Packet packet_1 = LoRa_GSEData_2(0x07,
-					&LoadCells,
-					&temp_sensor,
-					error);
-				*/
+
 			  	TX_Packet_Flag = 0;
 
 				break;
@@ -1601,7 +1802,8 @@ void RX_Receive(void)
 				lora_error = ERROR_SYSTEM_STATE_FAILED;
 		} //P2 (end)
 
-		RF_SW.port->ODR &= ~(GPIO_ODR_OD10);
+		RF_SW.port->ODR |= (GPIO_ODR_OD10);
+
 		//Transmit the packet!
 		SX1272_transmit(&lora, (uint8_t*) &packet);
 	  	do
@@ -1610,7 +1812,7 @@ void RX_Receive(void)
 	  	}while((transmit_state & 0x08) == 0x00); //will continue if transmit state and 0x08 are the same or 0
 	  	//wait for Tx complete!
 
-	  	RF_SW.port->ODR |= (GPIO_ODR_OD10);
+	  	RF_SW.port->ODR &= ~(GPIO_ODR_OD10);
 
 	  	SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
 	  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS); //resetting flag back to RXCONTINUOUS mode after flag has been set!
@@ -1624,7 +1826,7 @@ void RX_Receive(void)
 		lora_error = ERROR_INVALID_PACKET_DATA;
 		hardware_timer_count++;
 		__asm("NOP");
-		//__NVIC_EnableIRQ(EXTI9_5_IRQn);
+		__NVIC_EnableIRQ(EXTI9_5_IRQn);
 	}
 
 
@@ -1710,12 +1912,12 @@ i2c_comms_result get_temp(TEMP_SENSE *temp_sense){
 		uint8_t buf[4];
 		buf[0] = 0x00;
 		uint8_t ret;
-		ret = HAL_I2C_Master_Transmit(&hi2c2, temp_sense -> ADDR, buf[0], 1, HAL_MAX_DELAY);
+		ret = HAL_I2C_Master_Transmit(&hi2c2, temp_sense -> ADDR, buf[0], 1, 100);
 		if (ret != HAL_OK){
 			  result.comms_ok = false;
 		}
 		else {
-			  ret = HAL_I2C_Master_Receive(&hi2c2, temp_sense -> ADDR, result.return_value, 2, HAL_MAX_DELAY);
+			  ret = HAL_I2C_Master_Receive(&hi2c2, temp_sense -> ADDR, result.return_value, 2, 100);
 
 			  if (ret != HAL_OK){
 				  result.comms_ok = false;
@@ -1756,6 +1958,10 @@ i2c_comms_result get_temp(TEMP_SENSE *temp_sense){
 				if ((result.return_value[0] & 0x80) == 0x80){ //If the temp is < 0deg
 					temp = temp - 4096;
 				}
+				else{
+					temp = temp; //If temp is >= 0deg, dont need to do anything
+				}
+
 				uint8_t * tempPointer = (uint8_t *) &temp;
 				result.return_value[0] = tempPointer[0];
 				result.return_value[1] = tempPointer[1];
@@ -1776,11 +1982,228 @@ i2c_comms_result get_temp(TEMP_SENSE *temp_sense){
 i2c_comms_result config_thermocouple(TEMP_SENSE *temp_sense){
 	i2c_comms_result result;
 
+	// Get thermocouple ID
+	uint8_t ret;
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (temp_sense -> ADDR | 0x00), THERMO_REG_ID, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+	if (ret != HAL_OK){
+		__asm("NOP");
+		result.comms_ok = false;
+	}
+	else {
+		ret = HAL_I2C_Master_Receive(&hi2c2, (temp_sense -> ADDR | 0x01), result.return_value, 2, 100); //ADDR OR'ed with 0x01 for read command
+		if (ret != HAL_OK){
+			__asm("NOP");
+			result.comms_ok = false;
+		}
+		else{
+			__asm("NOP");
+			result.comms_ok = true;
+		}
+	}
+
+	// Setup Thermocouple Type and Filter Coefficent
+		uint8_t buff[2];
+		buff[0] = THERMO_REG_SENSOR_CONFIG;
+		buff [1] = 0;
+		if (temp_sense -> thermocouple_type == "k"){
+			buff[1] |= 0b000 << 4;
+		}
+		else if (temp_sense -> thermocouple_type == "j"){
+			buff[1] |= 0b001 << 4;
+		}
+		else if (temp_sense -> thermocouple_type == "t"){
+			buff[1] |= 0b010 << 4;
+		}
+		else if (temp_sense -> thermocouple_type == "n"){
+			buff[1] |= 0b011 << 4;
+		}
+		else if (temp_sense -> thermocouple_type == "s"){
+			buff[1] |= 0b100 << 4;
+		}
+		else if (temp_sense -> thermocouple_type == "e"){
+			buff[1] |= 0b101 << 4;
+		}
+		else if (temp_sense -> thermocouple_type == "b"){
+			buff[1] |= 0b110 << 4;
+		}
+		else if (temp_sense -> thermocouple_type == "r"){
+			buff[1] |= 0b111 << 4;
+		}
+		else{
+		}
+
+		//Set Filter Coefficent as 4 (mid filter)
+		buff[1] |= 0b00000100;
+		ret = HAL_I2C_Master_Transmit(&hi2c2, (temp_sense -> ADDR | 0x00), buff, 2, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+		if (ret != HAL_OK){
+			__asm("NOP");
+			result.comms_ok = false;
+		}
+		else {
+			ret = HAL_I2C_Master_Receive(&hi2c2, (temp_sense -> ADDR | 0x01), result.return_value, 2, 100); //ADDR OR'ed with 0x01 for read command
+			if (ret != HAL_OK){
+				__asm("NOP");
+				result.comms_ok = false;
+			}
+			else{
+				__asm("NOP");
+				result.comms_ok = true;
+			}
+		}
+
+
+
+
+
+
+		buff[0] = THERMO_REG_DEVICE_CONFIG;
+		buff[1] = 0b00011100; //Coldjunc resolution = 0.0625deg, ADC res = 18bit, burst mode temp = 128 samples, shutdown mode = normal operation
+		ret = HAL_I2C_Master_Transmit(&hi2c2, (temp_sense -> ADDR | 0x00), buff, 2, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+		if (ret != HAL_OK){
+			__asm("NOP");
+			result.comms_ok = false;
+		}
+		else {
+			ret = HAL_I2C_Master_Receive(&hi2c2, (temp_sense -> ADDR | 0x01), result.return_value, 2, 100); //ADDR OR'ed with 0x01 for read command
+			if (ret != HAL_OK){
+				__asm("NOP");
+				result.comms_ok = false;
+			}
+			else{
+				__asm("NOP");
+				result.comms_ok = true;
+			}
+		}
+
+
 
 
 
 
 	return result;
+}
+
+THERMOCOUPLE_CONFIG(uint8_t ADDR, char THERMOCOUPLE_TYPE){
+
+	HAL_StatusTypeDef ret;
+	uint8_t buf[2];
+	buf[0] = 0;
+	buf[1] = 0;
+
+	if (THERMOCOUPLE_TYPE == 'K'){
+		buf[1] |= 0b000 << 4;
+	}
+	else if (THERMOCOUPLE_TYPE == 'J'){
+		buf[1] |= 0b001 << 4;
+	}
+	else if (THERMOCOUPLE_TYPE == 'T'){
+		buf[1] |= 0b010 << 4;
+	}
+	else if (THERMOCOUPLE_TYPE == 'N'){
+		buf[1] |= 0b011 << 4;
+	}
+	else if (THERMOCOUPLE_TYPE == 'S'){
+		buf[1] |= 0b100 << 4;
+	}
+	else if (THERMOCOUPLE_TYPE == 'E'){
+		buf[1] |= 0b101 << 4;
+	}
+	else if (THERMOCOUPLE_TYPE == 'B'){
+		buf[1] |= 0b110 << 4;
+	}
+	else if (THERMOCOUPLE_TYPE == 'R'){
+		buf[1] |= 0b111 << 4;
+	}
+	else{
+	}
+
+
+	buf[0] = THERMO_REG_SENSOR_CONFIG;	//Pointer Addr
+	buf[1] |= 0b00000100;			  	//Data for data reg at pointer addr
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100); //ADDR OR'ed with 0x01 for read command
+
+  	buf[0] = THERMO_REG_DEVICE_CONFIG;
+  	buf[1] = 0b00011100; //Coldjunc resolution = 0.0625deg, ADC res = 18bit, burst mode temp = 128 samples, shutdown mode = normal operation
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+
+ 	buf[0] = THERMO_REG_ALERT1_LIMIT;
+ 	buf[1] = 0b01111111; //Coldjunc resolution = 0.0625deg, ADC res = 18bit, burst mode temp = 128 samples, shutdown mode = normal operation
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+
+
+  	buf[0] = THERMO_REG_ALERT2_LIMIT;
+  	buf[1] = 0b01111111; //Coldjunc resolution = 0.0625deg, ADC res = 18bit, burst mode temp = 128 samples, shutdown mode = normal operation
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+
+  	buf[0] = THERMO_REG_ALERT3_LIMIT;
+  	buf[1] = 0b01111111; //Coldjunc resolution = 0.0625deg, ADC res = 18bit, burst mode temp = 128 samples, shutdown mode = normal operation
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+  	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+
+	buf[0] = THERMO_REG_ALERT4_LIMIT;
+	buf[1] = 0b01111111; //Coldjunc resolution = 0.0625deg, ADC res = 18bit, burst mode temp = 128 samples, shutdown mode = normal operation
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100); //ADDR OR'ed with 0x00 for write command, and then writing pointer to THERMO_REG_ID
+
+	buf[0] = THERMO_REG_ALERT1_CONFIG;
+	buf[1] = 0b00011101;
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100);
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100);
+	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100);
+
+	buf[0] = THERMO_REG_ALERT2_CONFIG;
+	buf[1] = 0b00011101;
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100);
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100);
+	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100);
+
+	buf[0] = THERMO_REG_ALERT3_CONFIG;
+	buf[1] = 0b00011101;
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100);
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100);
+	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100);
+
+	buf[0] = THERMO_REG_ALERT4_CONFIG;
+	buf[1] = 0b00011101;
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 2, 100);
+	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100);
+	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 1, 100);
+
+	return;
+}
+
+
+float THERMOCOUPLE_GETTEMP(uint8_t ADDR){
+	HAL_StatusTypeDef ret;
+	uint8_t buf[8];
+	buf[0] = 0;
+	buf[1] = 0;
+
+  	buf[0] = THERMO_REG_HJ_TEMP;
+  	ret = HAL_I2C_Master_Transmit(&hi2c2, (ADDR | 0x00), buf, 1, 100); //Write to thermocouple IC, to move pointer to hot junc reg
+  	ret = HAL_I2C_Master_Receive(&hi2c2, (ADDR | 0x01), buf, 2, 100);	//Read 2 bytes from the hot junc reg into return val
+
+	float val = ((int16_t)buf[0] * 16) | (buf[1] / 16);
+	float temp = val;
+	if ((buf[0] & 0x80) == 0x80){ //If the temp is < 0deg
+		temp = temp - 4096;
+		temp = temp * -1;
+		}
+	else{
+		__asm("NOP");//If temp is >= 0deg, dont need to do anything
+	}
+	return temp;
+
 }
 
 

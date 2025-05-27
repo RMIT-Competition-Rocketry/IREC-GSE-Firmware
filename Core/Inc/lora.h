@@ -10,9 +10,13 @@
 
 #include "stm32f439xx.h"
 #include "string.h"
-#include "sensors.h"
 #include "spi.h"
 #include "stdbool.h"
+#include "gpio.h"
+
+
+extern GPIO LORA_CS_GPIO;
+#define LORA_CS GPIO_ODR_OD11
 
 
 #define SX1272_REG_FIFO                  0x00
@@ -81,6 +85,10 @@
 #define RxTimeout						0x01 << 7
 
 
+
+
+
+
 /**
  * @addtogroup LoRa
  * @{
@@ -127,7 +135,7 @@ typedef struct {
 
 /** @extends SPI */
 typedef struct SX1272 {
-  SPI base;                                                //!< Parent SPI interface
+  SPI_t * base;                                                //!< Parent SPI interface
   SX1272_Mode currentMode;                                  //!< Current operating mode.
   void (*enableBoost)(struct SX1272 *, bool);               //!< Power amp boost toggle method.          @see SX1272_enableBoost
   void (*standby)(struct SX1272 *);                         //!< SX1272 standby method.                  @see SX1272_standby
@@ -151,34 +159,7 @@ void SX1272_writeRegister(SX1272_t *, uint8_t, uint8_t);
 uint8_t SX1272_readRegister(SX1272_t *, uint8_t);
 
 
-LoRa_Packet LoRa_AVData(
-    uint8_t,
-    uint8_t,
-    uint8_t *,
-    uint8_t *,
-    uint8_t,
-    uint8_t *,
-    uint8_t,
-    float,
-    float
-);
-LoRa_Packet LoRa_GPSData(uint8_t, char *, char *, uint8_t);
-LoRa_Packet LoRa_PayloadData(uint8_t, uint8_t, uint8_t *, uint8_t);
-LoRa_Packet LoRa_GSEData_1(
-		uint8_t,
-		ADC124S021 *,
-		MCP96RL00_EMX_1 *,
-		MCP96RL00_EMX_1 *,
-		MCP96RL00_EMX_1 *,
-		MCP96RL00_EMX_1 *,
-		uint16_t
-		);
-LoRa_Packet LoRa_GSEData_2	(
-		uint8_t,
-		ADC124S021 *,
-		ADT75ARMZ *,
-		uint16_t
-		);
+
 
 LoRa_Packet LoRa_Command (uint8_t[LORA_MSG_LENGTH]);
 LoRa_Packet Dummy_Transmit();
