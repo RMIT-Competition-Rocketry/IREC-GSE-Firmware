@@ -229,22 +229,23 @@ void configureRCC_AHB1(void)
 	RCC->AHB1RSTR &= (uint16_t)(~(RCC_AHB1RSTR_GPIOARST | RCC_AHB1RSTR_GPIOCRST | RCC_AHB1RSTR_GPIOCRST | RCC_AHB1RSTR_GPIODRST | RCC_AHB1RSTR_GPIOERST | RCC_AHB1RSTR_GPIOFRST | RCC_AHB1RSTR_GPIOGRST));
 }
 
-void configure_TIM1(void) //operating at 5Hz or 200ms
+void configure_TIM1(void) //operating for 200ms
 {
 	TIM1->ARR &= ~(TIM_ARR_ARR_Msk);
 	TIM1->PSC &= ~(TIM_PSC_PSC_Msk);
 	TIM1->ARR |= (20001-1);
 	TIM1->PSC |= (1801-1);
 
+	TIM1->EGR |= TIM_EGR_UG;
+	TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register
+
 	//when the timer overflows, an interrupt will trigger!
 	TIM1->DIER &= !(TIM_DIER_UIE_Msk);
 	TIM1->DIER |= (TIM_DIER_UIE); //enable update event interrupt
 
-	TIM1->CR1 |= TIM_CR1_CEN; //enable TIM6
-	while((TIM1->SR & TIM_SR_UIF)==0); //wait for hardware registers to be updated
-	TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register
+	//TIM1->CR1 |= TIM_CR1_CEN; //enable TIM1
 
-	NVIC_SetPriority(TIM1_UP_TIM10_IRQn,1);
+	NVIC_SetPriority(TIM1_UP_TIM10_IRQn,10);
 	NVIC_EnableIRQ(TIM1_UP_TIM10_IRQn);
 }
 

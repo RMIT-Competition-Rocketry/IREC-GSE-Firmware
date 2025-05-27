@@ -477,7 +477,7 @@ int main(void)
 	 //*******************************NOTE - Updated to use HAL libraries, and funcions within main.c*************************************************************
 	 // Done by JC - 07/04/2025, for first legacy launch
 
-	//configure_TIM1(); //start LoRa timer -> as late as possible!
+	configure_TIM1(); //start LoRa timer -> as late as possible!
 
 
 
@@ -542,6 +542,8 @@ int main(void)
 		transmit_packets_spam();
 	}
 	*/
+
+	TIM1->CR1 |= TIM_CR1_CEN; //enable and start TIM1 (200ms)
 
 
 
@@ -1542,29 +1544,46 @@ static void MX_I2C2_Init(void)
 void TIM1_UP_TIM10_IRQHandler(void)
 {
 	hardware_timer_count++;
-	if(hardware_timer_count<5)
+	if(hardware_timer_count<15)
 	{
 		   //Hardware Timer interrupt callback for LoRa RX
-			TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register
+			TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register (clear the update event flag, the overflow of the ARR - which is what triggers this intertupt)
 	}
 	else
 	{
+		//Ensure Ignition is not igniting
+		Ignition1_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition1_OP.port->ODR |= (IGNITION2_OP);
+
+		Ignition2_ARM.port->ODR |= (IGNITION2_ARM);
+		Ignition2_OP.port->ODR |= (IGNITION2_OP);
+
+		//Turn off N2O Solenoid and turn off LED
 		CH3_ARM.port->ODR &= ~(CH3_Arm);
 		CH3_OP.port->ODR &= ~(CH3_Operate);
 		led_n2o.port->ODR &= ~(N2O_LED);
+
+		//Turn off O2 Solenoid and turn off LED
 		led_o2.port->ODR &= ~(O2_LED);
 		CH2_ARM.port->ODR &= ~(CH2_Arm);
 		CH2_OP.port->ODR &= ~(CH2_Operate);
 
-
-		CH1_ARM.port->ODR |= CH1_Arm;
-		CH1_OP.port->ODR |= CH1_Operate;
+		//Power off PURGE solenoid therefore starting purge
+		CH1_ARM.port->ODR &= ~(CH1_Arm);
+		CH1_OP.port->ODR &= ~(CH1_Operate);
 		//PURGE state
 
 		state &= ~0xFE; //0b11111110: all bits are bit-masked 0 except for system on
+		switch_case_state = 10; //force the swich case into purge as well
 		hardware_timer_count = 0;
 		TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register
 	}
+
+	TIM1->CR1 |= TIM_CR1_UDIS; 	//Disable update event generation
+	TIM1->EGR |= TIM_EGR_UG;	//Force an update and therefore reset the counter and prescaller (but not the ARR and PSC, so they will get reloaded from shadow register)
+	TIM1->CR1 &= ~TIM_CR1_UDIS; //Re-enable update event generation
+	//Timer is already enabled, and therefore will continue count, with event generation enabled, we will come back here once timer is overflowed (200ms)
+
 }
 
 void EXTI1_IRQHandler(void)
@@ -1626,6 +1645,11 @@ void RX_Receive(void)
 	//__NVIC_DisableIRQ(TIM1_UP_TIM10_IRQn); //Disable IQR for LoRa Hardware Timer
 
 	HAL_Delay(380); //important!!
+
+	TIM1->SR &= ~(TIM_SR_UIF); //clears UIF register
+	TIM1->CR1 |= TIM_CR1_UDIS; 	//Disable update event generation
+	TIM1->EGR |= TIM_EGR_UG;	//Force an update and therefore reset the counter and prescaller (but not the ARR and PSC, so they will get reloaded from shadow register)
+	TIM1->CR1 &= ~TIM_CR1_UDIS; //Re-enable update event generation
 
 
 	bool RX_result = SX1272_readReceive(&lora, pointerdata, LORA_MSG_LENGTH);
@@ -1778,7 +1802,8 @@ void RX_Receive(void)
 				lora_error = ERROR_SYSTEM_STATE_FAILED;
 		} //P2 (end)
 
-		RF_SW.port->ODR &= ~(GPIO_ODR_OD10);
+		RF_SW.port->ODR |= (GPIO_ODR_OD10);
+
 		//Transmit the packet!
 		SX1272_transmit(&lora, (uint8_t*) &packet);
 	  	do
@@ -1787,7 +1812,7 @@ void RX_Receive(void)
 	  	}while((transmit_state & 0x08) == 0x00); //will continue if transmit state and 0x08 are the same or 0
 	  	//wait for Tx complete!
 
-	  	RF_SW.port->ODR |= (GPIO_ODR_OD10);
+	  	RF_SW.port->ODR &= ~(GPIO_ODR_OD10);
 
 	  	SX1272_writeRegister(&lora, SX1272_REG_IRQ_FLAGS, 0x08); //clears IRQ reg
 	  	_SX1272_setMode(&lora, SX1272_MODE_RXCONTINUOUS); //resetting flag back to RXCONTINUOUS mode after flag has been set!

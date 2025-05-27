@@ -8,4 +8,4 @@
 ../Core/Src/driver.c:198:6:configureRCC_APB1	1
 ../Core/Src/driver.c:211:6:configureRCC_APB2	1
 ../Core/Src/driver.c:223:6:configureRCC_AHB1	1
-../Core/Src/driver.c:232:6:configure_TIM1	2
+../Core/Src/driver.c:232:6:configure_TIM1	1
